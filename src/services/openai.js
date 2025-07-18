@@ -1,10 +1,22 @@
 const OpenAI = require('openai');
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+let openai = null;
+
+// Initialize OpenAI client only if API key is provided
+if (process.env.OPENAI_API_KEY) {
+  openai = new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY,
+  });
+} else {
+  console.warn('OPENAI_API_KEY not set - AI features will not work');
+}
 
 const categorizeEmail = async (emailContent, categories) => {
+  if (!openai) {
+    console.warn('OpenAI not configured - returning default category');
+    return categories.length > 0 ? categories[0].name : "Uncategorized";
+  }
+
   if (!categories || categories.length === 0) {
     return "Uncategorized";
   }
@@ -51,6 +63,11 @@ const categorizeEmail = async (emailContent, categories) => {
 };
 
 const summarizeEmail = async (emailContent) => {
+  if (!openai) {
+    console.warn('OpenAI not configured - returning basic summary');
+    return `Email from ${emailContent.from || 'Unknown sender'} with subject: ${emailContent.subject || 'No subject'}`;
+  }
+
   const prompt = `
     Create a concise 1-2 sentence summary of this email focusing on the main point and any required actions.
     
