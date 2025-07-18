@@ -4,7 +4,8 @@
     "description": "AI Email Sorting App Backend",
     "main": "src/server.js",
     "scripts": {
-      "start": "node src/server.js",
+      "start": "node scripts/startup.js",
+      "start:direct": "node src/server.js",
       "dev": "nodemon src/server.js",
       "test": "jest",
       "db:migrate": "node scripts/migrate.js"

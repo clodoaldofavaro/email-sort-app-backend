@@ -1,5 +1,5 @@
 # fly.toml (for backend repository)
-app = "email-sorting-backend"
+app = "email-sort-app-backend"
 primary_region = "dfw"
 
 [build]
@@ -23,12 +23,12 @@ primary_region = "dfw"
     soft_limit = 20
 
   [[http_service.checks]]
-    grace_period = "10s"
-    interval = "30s"
+    grace_period = "30s"
+    interval = "15s"
     method = "GET"
     path = "/health"
     protocol = "http"
-    timeout = "5s"
+    timeout = "10s"
     headers = {}
 
 # VM configuration

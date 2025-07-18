@@ -50,12 +50,23 @@ app.use('/api/emails', emailRoutes);
 app.use('/api/accounts', accountRoutes);
 
 // Health check
-app.get('/health', (req, res) => {
-    res.json({
-        status: 'OK',
-        timestamp: new Date().toISOString(),
-        version: process.env.npm_package_version || '1.0.0'
-    });
+app.get('/health', async (req, res) => {
+    try {
+        // Basic health check - just return OK if server is running
+        res.json({
+            status: 'OK',
+            timestamp: new Date().toISOString(),
+            version: process.env.npm_package_version || '1.0.0',
+            environment: process.env.NODE_ENV || 'development'
+        });
+    } catch (error) {
+        console.error('Health check failed:', error);
+        res.status(500).json({
+            status: 'ERROR',
+            error: error.message,
+            timestamp: new Date().toISOString()
+        });
+    }
 });
 
 // Metrics endpoint - OPTIONAL
