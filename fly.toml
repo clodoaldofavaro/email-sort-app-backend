@@ -43,8 +43,7 @@ primary_region = "dfw"
   path = "/metrics"
 
 # Console configuration for debugging
-[console_command]
-  command = "/bin/bash"
+console_command = "/bin/bash"
 
 # Deploy configuration
 [deploy]
