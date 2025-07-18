@@ -7,8 +7,9 @@ if (process.env.OPENAI_API_KEY) {
   openai = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY,
   });
+  console.log('✅ OpenAI client initialized successfully');
 } else {
-  console.warn('OPENAI_API_KEY not set - AI features will not work');
+  console.warn('⚠️ OPENAI_API_KEY not set - AI features will not work');
 }
 
 const categorizeEmail = async (emailContent, categories) => {
