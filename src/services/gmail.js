@@ -2,6 +2,7 @@ const { google } = require('googleapis');
 const cheerio = require('cheerio');
 const db = require('../config/database');
 const { categorizeEmail, summarizeEmail } = require('./openai');
+const logger = require('../utils/logger');
 
 const getGmailClient = async (userId, accountEmail = null) => {
   try {
@@ -46,7 +47,7 @@ const getGmailClient = async (userId, accountEmail = null) => {
     
     return { gmail, account };
   } catch (error) {
-    console.error('Error getting Gmail client:', error);
+    logger.error('Error getting Gmail client:', error);
     throw error;
   }
 };
@@ -105,7 +106,7 @@ const extractUnsubscribeLink = (body, headers) => {
 
 const processNewEmails = async (userId) => {
   try {
-    console.log(`Processing emails for user: ${userId}`);
+    logger.info(`Processing emails for user: ${userId}`);
     
     const { gmail, account } = await getGmailClient(userId);
     
@@ -116,7 +117,7 @@ const processNewEmails = async (userId) => {
     );
     
     if (categoriesResult.rows.length === 0) {
-      console.log('No categories found for user:', userId);
+      logger.info('No categories found for user:', userId);
       return;
     }
 
@@ -131,11 +132,11 @@ const processNewEmails = async (userId) => {
     });
 
     if (!response.data.messages || response.data.messages.length === 0) {
-      console.log('No unread emails found for user:', userId);
+      logger.info('No unread emails found for user:', userId);
       return;
     }
 
-    console.log(`Found ${response.data.messages.length} unread emails for user: ${userId}`);
+    logger.info(`Found ${response.data.messages.length} unread emails for user: ${userId}`);
     let processedCount = 0;
 
     for (const message of response.data.messages) {
@@ -147,7 +148,7 @@ const processNewEmails = async (userId) => {
         );
 
         if (existingEmail.rows.length > 0) {
-          console.log(`Email ${message.id} already processed, skipping...`);
+          logger.info(`Email ${message.id} already processed, skipping...`);
           continue;
         }
 
@@ -195,20 +196,20 @@ const processNewEmails = async (userId) => {
         });
 
         processedCount++;
-        console.log(`Processed email: ${subject} -> ${categoryName}`);
+        logger.info(`Processed email: ${subject} -> ${categoryName}`);
         
         // Add small delay to avoid rate limiting
         await new Promise(resolve => setTimeout(resolve, 100));
         
       } catch (error) {
-        console.error(`Error processing email ${message.id}:`, error);
+        logger.error(`Error processing email ${message.id}:`, error);
         // Continue processing other emails
       }
     }
 
-    console.log(`Successfully processed ${processedCount} emails for user: ${userId}`);
+    logger.info(`Successfully processed ${processedCount} emails for user: ${userId}`);
   } catch (error) {
-    console.error('Error processing emails:', error);
+    logger.error('Error processing emails:', error);
     throw error;
   }
 };

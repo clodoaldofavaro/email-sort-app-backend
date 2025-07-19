@@ -3,6 +3,7 @@ const jwt = require('jsonwebtoken');
 const { google } = require('googleapis');
 const db = require('../config/database');
 const { authenticateToken } = require('../middleware/auth');
+const logger = require('../utils/logger');
 
 const router = express.Router();
 
@@ -14,10 +15,10 @@ const oauth2Client = new google.auth.OAuth2(
 
 // Log Google OAuth configuration status
 if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
-  console.log('✅ Google OAuth configured successfully');
-  console.log('📍 Redirect URI:', process.env.GOOGLE_REDIRECT_URI || 'https://email-sorting-frontend.fly.dev/callback');
+  logger.info('✅ Google OAuth configured successfully');
+  logger.info('📍 Redirect URI:', process.env.GOOGLE_REDIRECT_URI || 'https://email-sorting-frontend.fly.dev/callback');
 } else {
-  console.warn('⚠️ Google OAuth not fully configured');
+  logger.warn('⚠️ Google OAuth not fully configured');
 }
 
 // Generate Google OAuth URL
@@ -67,7 +68,7 @@ router.post('/google/callback', async (req, res) => {
         [id, email, name, picture]
       );
       user = result.rows[0];
-      console.log('New user created:', email);
+      logger.info('New user created:', email);
     } else {
       // Update existing user
       result = await db.query(
@@ -75,7 +76,7 @@ router.post('/google/callback', async (req, res) => {
         [email, name, picture, id]
       );
       user = result.rows[0];
-      console.log('Existing user updated:', email);
+      logger.info('Existing user updated:', email);
     }
 
     // Store/update email account
@@ -104,7 +105,7 @@ router.post('/google/callback', async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Auth error:', error);
+    logger.error('Auth error:', error);
     res.status(400).json({ 
       error: 'Authentication failed',
       message: error.message 
@@ -126,7 +127,7 @@ router.get('/me', authenticateToken, async (req, res) => {
 
     res.json({ user: result.rows[0] });
   } catch (error) {
-    console.error('Get user error:', error);
+    logger.error('Get user error:', error);
     res.status(500).json({ error: 'Failed to get user info' });
   }
 });
@@ -158,7 +159,7 @@ router.post('/refresh', authenticateToken, async (req, res) => {
 
     res.json({ message: 'Token refreshed successfully' });
   } catch (error) {
-    console.error('Token refresh error:', error);
+    logger.error('Token refresh error:', error);
     res.status(500).json({ error: 'Failed to refresh token' });
   }
 });

@@ -3,6 +3,7 @@ const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const { CronJob } = require('cron');
+const logger = require('./utils/logger');
 require('dotenv').config();
 
 const authRoutes = require('./routes/auth');
@@ -23,7 +24,7 @@ app.use(helmet({
 app.use(cors({
     origin: [
         'http://localhost:3000',
-        'https://email-sorting-frontend.fly.dev',
+        'https://email-sort-app-frontend.fly.dev',
         process.env.FRONTEND_URL
     ].filter(Boolean),
     credentials: true,
@@ -60,7 +61,7 @@ app.get('/health', async (req, res) => {
             environment: process.env.NODE_ENV || 'development'
         });
     } catch (error) {
-        console.error('Health check failed:', error);
+        logger.error('Health check failed:', error);
         res.status(500).json({
             status: 'ERROR',
             error: error.message,
@@ -96,16 +97,16 @@ app.get('/', (req, res) => {
 if (process.env.NODE_ENV === 'production') {
     // Process emails every 10 minutes
     const emailJob = new CronJob('*/10 * * * *', async () => {
-        console.log('Starting scheduled email processing...');
+        logger.info('Starting scheduled email processing...');
         await scheduleEmailProcessing();
     });
     emailJob.start();
-    console.log('Email processing scheduled');
+    logger.info('Email processing scheduled');
 }
 
 // Error handling middleware
 app.use((err, req, res, next) => {
-    console.error('Error:', err.stack);
+    logger.error('Error:', err.stack);
     res.status(500).json({
         error: 'Internal server error',
         message: process.env.NODE_ENV === 'development' ? err.message : 'Something went wrong!'
@@ -119,13 +120,13 @@ app.use('*', (req, res) => {
 
 // Graceful shutdown
 process.on('SIGTERM', () => {
-    console.log('SIGTERM received, shutting down gracefully');
+    logger.info('SIGTERM received, shutting down gracefully');
     process.exit(0);
 });
 
 app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Server running on port ${PORT}`);
-    console.log(`Environment: ${process.env.NODE_ENV}`);
+    logger.info(`Server running on port ${PORT}`);
+    logger.info(`Environment: ${process.env.NODE_ENV}`);
 });
 
 module.exports = app;

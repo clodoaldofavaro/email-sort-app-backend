@@ -1,4 +1,5 @@
 const OpenAI = require('openai');
+const logger = require('../utils/logger');
 
 let openai = null;
 
@@ -7,14 +8,14 @@ if (process.env.OPENAI_API_KEY) {
   openai = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY,
   });
-  console.log('✅ OpenAI client initialized successfully');
+  logger.info('✅ OpenAI client initialized successfully');
 } else {
-  console.warn('⚠️ OPENAI_API_KEY not set - AI features will not work');
+  logger.warn('⚠️ OPENAI_API_KEY not set - AI features will not work');
 }
 
 const categorizeEmail = async (emailContent, categories) => {
   if (!openai) {
-    console.warn('OpenAI not configured - returning default category');
+    logger.warn('OpenAI not configured - returning default category');
     return categories.length > 0 ? categories[0].name : "Uncategorized";
   }
 
@@ -58,14 +59,14 @@ const categorizeEmail = async (emailContent, categories) => {
     
     return validCategory ? validCategory.name : "Uncategorized";
   } catch (error) {
-    console.error('OpenAI categorization error:', error);
+    logger.error('OpenAI categorization error:', error);
     return "Uncategorized";
   }
 };
 
 const summarizeEmail = async (emailContent) => {
   if (!openai) {
-    console.warn('OpenAI not configured - returning basic summary');
+    logger.warn('OpenAI not configured - returning basic summary');
     return `Email from ${emailContent.from || 'Unknown sender'} with subject: ${emailContent.subject || 'No subject'}`;
   }
 
@@ -88,7 +89,7 @@ const summarizeEmail = async (emailContent) => {
 
     return response.choices[0].message.content.trim();
   } catch (error) {
-    console.error('OpenAI summarization error:', error);
+    logger.error('OpenAI summarization error:', error);
     return "Unable to generate summary - please check email content manually.";
   }
 };

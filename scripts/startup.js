@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+// Import logger (we'll use console for startup since logger might not be ready)
 // Startup script to help debug deployment issues
 console.log('🚀 Starting Email Sorting App Backend...');
 console.log('Environment:', process.env.NODE_ENV);

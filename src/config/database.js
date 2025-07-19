@@ -1,4 +1,5 @@
 const { Pool } = require('pg');
+const logger = require('../utils/logger');
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -10,20 +11,20 @@ const pool = new Pool({
 
 // Test connection
 pool.on('connect', () => {
-  console.log('Connected to PostgreSQL database');
+  logger.info('Connected to PostgreSQL database');
 });
 
 pool.on('error', (err) => {
-  console.error('Database connection error:', err);
+  logger.error('Database connection error:', err);
 });
 
 // Test the connection on startup
 const testConnection = async () => {
   try {
     await pool.query('SELECT 1');
-    console.log('Database connection test successful');
+    logger.info('Database connection test successful');
   } catch (error) {
-    console.error('Database connection test failed:', error);
+    logger.error('Database connection test failed:', error);
     // Don't exit - let the app start anyway for health checks
   }
 };
@@ -32,7 +33,7 @@ const testConnection = async () => {
 if (process.env.DATABASE_URL) {
   testConnection();
 } else {
-  console.warn('DATABASE_URL not set - database operations will fail');
+  logger.warn('DATABASE_URL not set - database operations will fail');
 }
 
 module.exports = pool;
