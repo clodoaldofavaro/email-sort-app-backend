@@ -16,7 +16,7 @@ const oauth2Client = new google.auth.OAuth2(
 // Log Google OAuth configuration status
 if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
     logger.info('✅ Google OAuth configured successfully');
-    logger.info('📍 Redirect URI:', process.env.GOOGLE_REDIRECT_URI;
+    logger.info('📍 Redirect URI:', process.env.GOOGLE_REDIRECT_URI);
 } else {
     logger.warn('⚠️ Google OAuth not fully configured');
 }

@@ -58,7 +58,7 @@ router.get('/category/:categoryId', authenticateToken, async (req, res) => {
 router.get('/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    
+
     const result = await db.query(
       `SELECT e.*, c.name as category_name 
        FROM emails e
@@ -82,7 +82,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
 router.delete('/bulk', authenticateToken, async (req, res) => {
   try {
     const { emailIds } = req.body;
-    
+
     if (!Array.isArray(emailIds) || emailIds.length === 0) {
       return res.status(400).json({ error: 'Email IDs array is required' });
     }
@@ -93,7 +93,7 @@ router.delete('/bulk', authenticateToken, async (req, res) => {
       [req.user.id, ...emailIds]
     );
 
-    res.json({ 
+    res.json({
       message: `Successfully deleted ${result.rows.length} emails`,
       deletedIds: result.rows.map(row => row.id)
     });
@@ -107,7 +107,7 @@ router.delete('/bulk', authenticateToken, async (req, res) => {
 router.post('/bulk/unsubscribe', authenticateToken, async (req, res) => {
   try {
     const { emailIds } = req.body;
-    
+
     if (!Array.isArray(emailIds) || emailIds.length === 0) {
       return res.status(400).json({ error: 'Email IDs array is required' });
     }
@@ -121,7 +121,7 @@ router.post('/bulk/unsubscribe', authenticateToken, async (req, res) => {
     );
 
     const unsubscribeResults = [];
-    
+
     for (const email of result.rows) {
       try {
         const success = await processUnsubscribe(email.unsubscribe_link);

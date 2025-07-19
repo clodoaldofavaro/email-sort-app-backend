@@ -16,11 +16,11 @@ if (process.env.OPENAI_API_KEY) {
 const categorizeEmail = async (emailContent, categories) => {
   if (!openai) {
     logger.warn('OpenAI not configured - returning default category');
-    return categories.length > 0 ? categories[0].name : "Uncategorized";
+    return categories.length > 0 ? categories[0].name : 'Uncategorized';
   }
 
   if (!categories || categories.length === 0) {
-    return "Uncategorized";
+    return 'Uncategorized';
   }
 
   const prompt = `
@@ -44,8 +44,8 @@ const categorizeEmail = async (emailContent, categories) => {
 
   try {
     const response = await openai.chat.completions.create({
-      model: "gpt-3.5-turbo",
-      messages: [{ role: "user", content: prompt }],
+      model: 'gpt-3.5-turbo',
+      messages: [{ role: 'user', content: prompt }],
       max_tokens: 50,
       temperature: 0.1
     });
@@ -57,10 +57,10 @@ const categorizeEmail = async (emailContent, categories) => {
       cat.name.toLowerCase() === category.toLowerCase()
     );
     
-    return validCategory ? validCategory.name : "Uncategorized";
+    return validCategory ? validCategory.name : 'Uncategorized';
   } catch (error) {
     logger.error('OpenAI categorization error:', error);
-    return "Uncategorized";
+    return 'Uncategorized';
   }
 };
 
@@ -81,8 +81,8 @@ const summarizeEmail = async (emailContent) => {
 
   try {
     const response = await openai.chat.completions.create({
-      model: "gpt-3.5-turbo",
-      messages: [{ role: "user", content: prompt }],
+      model: 'gpt-3.5-turbo',
+      messages: [{ role: 'user', content: prompt }],
       max_tokens: 100,
       temperature: 0.1
     });
@@ -90,7 +90,7 @@ const summarizeEmail = async (emailContent) => {
     return response.choices[0].message.content.trim();
   } catch (error) {
     logger.error('OpenAI summarization error:', error);
-    return "Unable to generate summary - please check email content manually.";
+    return 'Unable to generate summary - please check email content manually.';
   }
 };
 

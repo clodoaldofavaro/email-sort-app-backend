@@ -7,7 +7,7 @@ const logger = require('../utils/logger');
 const getGmailClient = async (userId, accountEmail = null) => {
   try {
     let query = 'SELECT * FROM email_accounts WHERE user_id = $1';
-    let params = [userId];
+    const params = [userId];
     
     if (accountEmail) {
       query += ' AND email = $2';
