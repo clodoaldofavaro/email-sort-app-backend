@@ -14,12 +14,22 @@ if (process.env.OPENAI_API_KEY) {
 }
 
 const categorizeEmail = async (emailContent, categories) => {
+  logger.info('📧 Starting email categorization', {
+    hasOpenAI: !!openai,
+    categoriesCount: categories?.length || 0,
+    categories: categories?.map(c => ({ name: c.name, description: c.description })),
+    emailSubject: emailContent?.subject,
+    emailFrom: emailContent?.from,
+    emailBodyLength: emailContent?.body?.length || 0
+  });
+
   if (!openai) {
     logger.warn('OpenAI not configured - returning default category');
     return categories.length > 0 ? categories[0].name : 'Uncategorized';
   }
 
   if (!categories || categories.length === 0) {
+    logger.warn('No categories provided - returning Uncategorized');
     return 'Uncategorized';
   }
 
@@ -32,15 +42,23 @@ const categorizeEmail = async (emailContent, categories) => {
     Content Preview: ${emailContent.body ? emailContent.body.substring(0, 1000) : 'No content'}
     
     Available Categories:
-    ${categories.map(cat => `- ${cat.name}: ${cat.description}`).join('\n')}
+    ${categories.map(cat => `- ${cat.name}: ${cat.description || 'No description'}`).join('\n')}
     
     Rules:
-    1. Return ONLY the category name that best matches
+    1. Return ONLY the exact category name that best matches (case-sensitive)
     2. If no category is a good fit, return "Uncategorized"
     3. Consider the email's purpose, content, and sender
     4. Be precise and consistent
+    5. Do not add any explanation, just the category name
     
     Category:`;
+
+  logger.info('🤖 Sending prompt to OpenAI', {
+    promptLength: prompt.length,
+    model: 'gpt-3.5-turbo',
+    temperature: 0.1,
+    maxTokens: 50
+  });
 
   try {
     const response = await openai.chat.completions.create({
@@ -51,13 +69,32 @@ const categorizeEmail = async (emailContent, categories) => {
     });
 
     const category = response.choices[0].message.content.trim();
+    logger.info('🤖 OpenAI response received', {
+      rawResponse: category,
+      responseLength: category.length
+    });
 
     // Validate that the returned category exists
     const validCategory = categories.find(cat => cat.name.toLowerCase() === category.toLowerCase());
-
-    return validCategory ? validCategory.name : 'Uncategorized';
+    
+    if (validCategory) {
+      logger.info('✅ Valid category found', {
+        returnedCategory: category,
+        matchedCategory: validCategory.name
+      });
+      return validCategory.name;
+    } else {
+      logger.warn('⚠️ Category not found in available categories', {
+        returnedCategory: category,
+        availableCategories: categories.map(c => c.name)
+      });
+      return 'Uncategorized';
+    }
   } catch (error) {
-    logger.error('OpenAI categorization error:', error);
+    logger.error('❌ OpenAI categorization error:', {
+      error: error.message,
+      stack: error.stack
+    });
     return 'Uncategorized';
   }
 };

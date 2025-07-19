@@ -69,6 +69,24 @@ router.post('/google/callback', async (req, res) => {
       );
       user = result.rows[0];
       logger.info('New user created:', email);
+      
+      // Create default categories for the new user (matching schema.sql)
+      const defaultCategories = [
+        { name: 'Newsletters', description: 'Marketing newsletters and promotional emails' },
+        { name: 'Social Media', description: 'Notifications from social media platforms' },
+        { name: 'Shopping', description: 'E-commerce receipts and promotional offers' },
+        { name: 'Work', description: 'Work-related emails and notifications' },
+        { name: 'Personal', description: 'Personal emails from friends and family' },
+        { name: 'Uncategorized', description: 'Emails that do not fit into any specific category' }
+      ];
+      
+      for (const category of defaultCategories) {
+        await db.query(
+          'INSERT INTO categories (user_id, name, description) VALUES ($1, $2, $3)',
+          [user.id, category.name, category.description]
+        );
+      }
+      logger.info('Default categories created for user:', email);
     } else {
       // Update existing user
       result = await db.query(
