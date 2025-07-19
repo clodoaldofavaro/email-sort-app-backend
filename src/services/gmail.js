@@ -104,11 +104,16 @@ const extractUnsubscribeLink = (body, headers) => {
   return null;
 };
 
-const processNewEmails = async userId => {
+const processNewEmails = async (userId, accountEmail = null) => {
   try {
-    logger.info(`Processing emails for user: ${userId}`);
+    // Get user info for better logging
+    const userResult = await db.query('SELECT name, email FROM users WHERE id = $1', [userId]);
+    const user = userResult.rows[0];
+    
+    logger.info(`Processing emails for user: ${user.name} (${user.email}) - User ID: ${userId}`);
 
-    const { gmail, account } = await getGmailClient(userId);
+    const { gmail, account } = await getGmailClient(userId, accountEmail);
+    logger.info(`Using email account: ${account.email}`);
 
     // Get user's categories
     const categoriesResult = await db.query('SELECT * FROM categories WHERE user_id = $1', [
@@ -116,7 +121,7 @@ const processNewEmails = async userId => {
     ]);
 
     if (categoriesResult.rows.length === 0) {
-      logger.info('No categories found for user:', userId);
+      logger.info(`No categories found for user: ${user.name} (${user.email})`);
       return;
     }
 
@@ -131,11 +136,11 @@ const processNewEmails = async userId => {
     });
 
     if (!response.data.messages || response.data.messages.length === 0) {
-      logger.info('No unread emails found for user:', userId);
+      logger.info(`No unread emails found for ${user.name} (${user.email}) in account ${account.email}`);
       return;
     }
 
-    logger.info(`Found ${response.data.messages.length} unread emails for user: ${userId}`);
+    logger.info(`Found ${response.data.messages.length} unread emails for ${user.name} (${user.email}) in account ${account.email}`);
     let processedCount = 0;
 
     for (const message of response.data.messages) {
@@ -147,7 +152,7 @@ const processNewEmails = async userId => {
         );
 
         if (existingEmail.rows.length > 0) {
-          logger.info(`Email ${message.id} already processed, skipping...`);
+          logger.info(`Email ${message.id} already processed for ${user.name} (${account.email}), skipping...`);
           continue;
         }
 
@@ -203,7 +208,7 @@ const processNewEmails = async userId => {
         });
 
         processedCount++;
-        logger.info(`Processed email: ${subject} -> ${categoryName}`);
+        logger.info(`Processed email for ${user.name} (${account.email}): ${subject} -> ${categoryName}`);
 
         // Add small delay to avoid rate limiting
         await new Promise(resolve => setTimeout(resolve, 100));
@@ -213,7 +218,7 @@ const processNewEmails = async userId => {
       }
     }
 
-    logger.info(`Successfully processed ${processedCount} emails for user: ${userId}`);
+    logger.info(`Successfully processed ${processedCount} emails for ${user.name} (${user.email}) in account ${account.email}`);
   } catch (error) {
     logger.error('Error processing emails:', error);
     throw error;
