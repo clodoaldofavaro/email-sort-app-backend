@@ -16,7 +16,18 @@ const oauth2Client = new google.auth.OAuth2(
 router.get('/', authenticateToken, async (req, res) => {
   try {
     const result = await db.query(
-      'SELECT id, email, provider, created_at, updated_at FROM email_accounts WHERE user_id = $1 ORDER BY created_at DESC',
+      `SELECT 
+        id, 
+        email, 
+        provider, 
+        created_at, 
+        updated_at,
+        COALESCE(is_connected, true) as is_connected,
+        last_tested,
+        last_error
+      FROM email_accounts 
+      WHERE user_id = $1 
+      ORDER BY created_at DESC`,
       [req.user.id]
     );
 
@@ -244,6 +255,12 @@ router.get('/:id/test', authenticateToken, async (req, res) => {
         q: 'is:unread',
       });
 
+      // Update connection status in database
+      await db.query(
+        'UPDATE email_accounts SET is_connected = true, last_tested = NOW(), last_error = NULL WHERE id = $1',
+        [id]
+      );
+
       res.json({
         connected: true,
         status: 'connected',
@@ -272,6 +289,12 @@ router.get('/:id/test', authenticateToken, async (req, res) => {
             [credentials.access_token, id]
           );
 
+          // Update connection status in database
+          await db.query(
+            'UPDATE email_accounts SET is_connected = true, last_tested = NOW(), last_error = NULL WHERE id = $1',
+            [id]
+          );
+
           res.json({
             connected: true,
             status: 'reconnected',
@@ -283,6 +306,12 @@ router.get('/:id/test', authenticateToken, async (req, res) => {
             },
           });
         } catch (refreshError) {
+          // Update connection status in database
+          await db.query(
+            'UPDATE email_accounts SET is_connected = false, last_tested = NOW(), last_error = $1 WHERE id = $2',
+            ['Authentication failed - refresh token invalid', id]
+          );
+
           res.status(401).json({
             connected: false,
             status: 'disconnected',
@@ -300,6 +329,15 @@ router.get('/:id/test', authenticateToken, async (req, res) => {
     }
   } catch (error) {
     console.error('Error testing account connection:', error);
+    
+    // Update connection status in database if it's an auth error
+    if (error.code === 401 || error.message?.includes('auth')) {
+      await db.query(
+        'UPDATE email_accounts SET is_connected = false, last_tested = NOW(), last_error = $1 WHERE id = $2',
+        [error.message || 'Unknown error', req.params.id]
+      );
+    }
+    
     res.status(500).json({ 
       connected: false,
       status: 'error',

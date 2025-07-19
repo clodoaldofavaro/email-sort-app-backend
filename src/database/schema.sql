@@ -22,6 +22,9 @@ CREATE TABLE IF NOT EXISTS email_accounts (
     access_token TEXT NOT NULL,
     refresh_token TEXT NOT NULL,
     provider VARCHAR(50) DEFAULT 'google',
+    is_connected BOOLEAN DEFAULT true,
+    last_tested TIMESTAMP,
+    last_error TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(user_id, email)
