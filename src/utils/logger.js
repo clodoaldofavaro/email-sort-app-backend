@@ -14,10 +14,14 @@ const logger = winston.createLogger({
   ]
 });
 
-if (process.env.NODE_ENV !== 'production') {
-  logger.add(new winston.transports.Console({
-    format: winston.format.simple()
-  }));
-}
+// Always add console transport for cloud deployments
+logger.add(new winston.transports.Console({
+  format: process.env.NODE_ENV === 'production' 
+    ? winston.format.combine(
+        winston.format.timestamp(),
+        winston.format.json()
+      )
+    : winston.format.simple()
+}));
 
 module.exports = logger;
