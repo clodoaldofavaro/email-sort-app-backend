@@ -1,0 +1,119 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: email-sort-backend
+    ports:
+      - "8080:8080"
+    environment:
+      - NODE_ENV=development
+      - PORT=8080
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/email_sort_app
+      - REDIS_URL=redis://redis:6379
+      - JWT_SECRET=your-local-dev-secret-change-this
+      # Add your Google OAuth credentials
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+      - GOOGLE_REDIRECT_URI=${GOOGLE_REDIRECT_URI:-http://localhost:3000/auth/callback}
+      # Add your OpenAI API key
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      # Add Browserbase credentials if you have them
+      - BROWSERBASE_API_KEY=${BROWSERBASE_API_KEY}
+      - BROWSERBASE_PROJECT_ID=${BROWSERBASE_PROJECT_ID}
+      # Frontend URL
+      - FRONTEND_URL=http://localhost:3000
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./src:/app/src
+      - ./logs:/app/logs
+      - /app/node_modules
+    networks:
+      - email-sort-network
+    command: npm run dev
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: email-sort-postgres
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=email_sort_app
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./src/database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+    networks:
+      - email-sort-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d email_sort_app"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: email-sort-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - email-sort-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    command: redis-server --appendonly yes
+
+  frontend:
+    build:
+      context: ../email-sort-app-frontend
+      dockerfile: Dockerfile.dev
+    container_name: email-sort-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+      - REACT_APP_API_URL=http://localhost:8080
+    depends_on:
+      - backend
+    volumes:
+      - ../email-sort-app-frontend/src:/app/src
+      - ../email-sort-app-frontend/public:/app/public
+      - /app/node_modules
+    networks:
+      - email-sort-network
+    command: npm start
+
+  # Optional: pgAdmin for database management
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: email-sort-pgadmin
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=admin@example.com
+      - PGADMIN_DEFAULT_PASSWORD=admin
+    ports:
+      - "5050:80"
+    depends_on:
+      - postgres
+    networks:
+      - email-sort-network
+    profiles:
+      - tools
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  email-sort-network:
+    driver: bridge
