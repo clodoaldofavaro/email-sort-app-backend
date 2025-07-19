@@ -10,18 +10,18 @@ const logger = winston.createLogger({
   defaultMeta: { service: 'email-sorting-api' },
   transports: [
     new winston.transports.File({ filename: 'logs/error.log', level: 'error' }),
-    new winston.transports.File({ filename: 'logs/combined.log' })
-  ]
+    new winston.transports.File({ filename: 'logs/combined.log' }),
+  ],
 });
 
 // Always add console transport for cloud deployments
-logger.add(new winston.transports.Console({
-  format: process.env.NODE_ENV === 'production' 
-    ? winston.format.combine(
-        winston.format.timestamp(),
-        winston.format.json()
-      )
-    : winston.format.simple()
-}));
+logger.add(
+  new winston.transports.Console({
+    format:
+      process.env.NODE_ENV === 'production'
+        ? winston.format.combine(winston.format.timestamp(), winston.format.json())
+        : winston.format.simple(),
+  })
+);
 
 module.exports = logger;

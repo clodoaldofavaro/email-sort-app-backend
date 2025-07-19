@@ -16,27 +16,31 @@ const app = express();
 const PORT = process.env.PORT || 8080;
 
 // Security middleware
-app.use(helmet({
-    contentSecurityPolicy: false // Disable CSP for API
-}));
+app.use(
+  helmet({
+    contentSecurityPolicy: false, // Disable CSP for API
+  })
+);
 
 // CORS configuration
-app.use(cors({
+app.use(
+  cors({
     origin: [
-        'http://localhost:3000',
-        'https://email-sort-app-frontend.fly.dev',
-        process.env.FRONTEND_URL
+      'http://localhost:3000',
+      'https://email-sort-app-frontend.fly.dev',
+      process.env.FRONTEND_URL,
     ].filter(Boolean),
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization']
-}));
+    allowedHeaders: ['Content-Type', 'Authorization'],
+  })
+);
 
 // Rate limiting
 const limiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 100, // limit each IP to 100 requests per windowMs
-    message: 'Too many requests from this IP, please try again later.'
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // limit each IP to 100 requests per windowMs
+  message: 'Too many requests from this IP, please try again later.',
 });
 app.use('/api/', limiter);
 
@@ -52,81 +56,81 @@ app.use('/api/accounts', accountRoutes);
 
 // Health check
 app.get('/health', async (req, res) => {
-    try {
-        // Basic health check - just return OK if server is running
-        res.json({
-            status: 'OK',
-            timestamp: new Date().toISOString(),
-            version: process.env.npm_package_version || '1.0.0',
-            environment: process.env.NODE_ENV || 'development'
-        });
-    } catch (error) {
-        logger.error('Health check failed:', error);
-        res.status(500).json({
-            status: 'ERROR',
-            error: error.message,
-            timestamp: new Date().toISOString()
-        });
-    }
+  try {
+    // Basic health check - just return OK if server is running
+    res.json({
+      status: 'OK',
+      timestamp: new Date().toISOString(),
+      version: process.env.npm_package_version || '1.0.0',
+      environment: process.env.NODE_ENV || 'development',
+    });
+  } catch (error) {
+    logger.error('Health check failed:', error);
+    res.status(500).json({
+      status: 'ERROR',
+      error: error.message,
+      timestamp: new Date().toISOString(),
+    });
+  }
 });
 
 // Metrics endpoint - OPTIONAL
 app.get('/metrics', (req, res) => {
-    res.json({
-        uptime: process.uptime(),
-        memory: process.memoryUsage(),
-        timestamp: new Date().toISOString()
-    });
+  res.json({
+    uptime: process.uptime(),
+    memory: process.memoryUsage(),
+    timestamp: new Date().toISOString(),
+  });
 });
 
 // Root route
 app.get('/', (req, res) => {
-    res.json({
-        message: 'Email Sorting API',
-        version: '1.0.0',
-        endpoints: {
-            auth: '/api/auth',
-            categories: '/api/categories',
-            emails: '/api/emails',
-            accounts: '/api/accounts'
-        }
-    });
+  res.json({
+    message: 'Email Sorting API',
+    version: '1.0.0',
+    endpoints: {
+      auth: '/api/auth',
+      categories: '/api/categories',
+      emails: '/api/emails',
+      accounts: '/api/accounts',
+    },
+  });
 });
 
 // Start email processing job
 if (process.env.NODE_ENV === 'production') {
-    // Process emails every 10 minutes
-    const emailJob = new CronJob('*/10 * * * *', async () => {
-        logger.info('Starting scheduled email processing...');
-        await scheduleEmailProcessing();
-    });
-    emailJob.start();
-    logger.info('Email processing scheduled');
+  // Process emails every 10 minutes
+  const emailJob = new CronJob('*/10 * * * *', async () => {
+    logger.info('Starting scheduled email processing...');
+    await scheduleEmailProcessing();
+  });
+  emailJob.start();
+  logger.info('Email processing scheduled');
 }
 
 // Error handling middleware
 app.use((err, req, res, _) => {
-    logger.error('Error:', err.stack);
-    res.status(500).json({
-        error: 'Internal server error',
-        message: process.env.NODE_ENV === 'development' ? err.message : 'Something went wrong!'
-    });
+  logger.error('Error:', err.stack);
+  res.status(500).json({
+    error: 'Internal server error',
+    message: process.env.NODE_ENV === 'development' ? err.message : 'Something went wrong!',
+  });
 });
 
 // 404 handler
 app.use('*', (req, res) => {
-    res.status(404).json({ error: 'Route not found' });
+  res.status(404).json({ error: 'Route not found' });
 });
 
 // Graceful shutdown
 process.on('SIGTERM', () => {
-    logger.info('SIGTERM received, shutting down gracefully');
-    process.exit(0);
+  logger.info('SIGTERM received, shutting down gracefully');
+  process.exit(0);
 });
 
 app.listen(PORT, '0.0.0.0', () => {
-    logger.info(`Server running on port ${PORT}`);
-    logger.info(`Environment: ${process.env.NODE_ENV}`);
+  logger.info(`Server running on port ${PORT}`);
+  logger.info(`Environment: ${process.env.NODE_ENV}`);
 });
 
 module.exports = app;

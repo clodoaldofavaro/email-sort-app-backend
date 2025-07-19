@@ -62,7 +62,7 @@ router.post('/google', authenticateToken, async (req, res) => {
 
     res.status(201).json({
       message: 'Gmail account connected successfully',
-      account: result.rows[0]
+      account: result.rows[0],
     });
   } catch (error) {
     console.error('Error connecting Gmail account:', error);
@@ -76,14 +76,14 @@ router.delete('/:id', authenticateToken, async (req, res) => {
     const { id } = req.params;
 
     // Check if this is the last account
-    const accountCount = await db.query(
-      'SELECT COUNT(*) FROM email_accounts WHERE user_id = $1',
-      [req.user.id]
-    );
+    const accountCount = await db.query('SELECT COUNT(*) FROM email_accounts WHERE user_id = $1', [
+      req.user.id,
+    ]);
 
     if (parseInt(accountCount.rows[0].count) === 1) {
-      return res.status(400).json({ 
-        error: 'Cannot remove the last connected account. You must have at least one email account connected.' 
+      return res.status(400).json({
+        error:
+          'Cannot remove the last connected account. You must have at least one email account connected.',
       });
     }
 
@@ -96,9 +96,9 @@ router.delete('/:id', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'Account not found' });
     }
 
-    res.json({ 
+    res.json({
       message: 'Account disconnected successfully',
-      removedEmail: result.rows[0].email
+      removedEmail: result.rows[0].email,
     });
   } catch (error) {
     console.error('Error removing account:', error);
@@ -124,9 +124,9 @@ router.post('/:id/process', authenticateToken, async (req, res) => {
     // Process emails for this user
     await processNewEmails(req.user.id);
 
-    res.json({ 
+    res.json({
       message: 'Email processing started',
-      account: accountResult.rows[0].email
+      account: accountResult.rows[0].email,
     });
   } catch (error) {
     console.error('Error processing emails:', error);
@@ -162,7 +162,7 @@ router.get('/:id/stats', authenticateToken, async (req, res) => {
 
     res.json({
       account: accountResult.rows[0],
-      stats: statsResult.rows[0]
+      stats: statsResult.rows[0],
     });
   } catch (error) {
     console.error('Error fetching account stats:', error);
@@ -186,20 +186,20 @@ router.post('/:id/refresh', authenticateToken, async (req, res) => {
 
     const account = accountResult.rows[0];
     oauth2Client.setCredentials({
-      refresh_token: account.refresh_token
+      refresh_token: account.refresh_token,
     });
 
     const { credentials } = await oauth2Client.refreshAccessToken();
-    
+
     // Update stored tokens
     await db.query(
       'UPDATE email_accounts SET access_token = $1, updated_at = NOW() WHERE id = $2',
       [credentials.access_token, id]
     );
 
-    res.json({ 
+    res.json({
       message: 'Account tokens refreshed successfully',
-      email: account.email
+      email: account.email,
     });
   } catch (error) {
     console.error('Error refreshing account tokens:', error);

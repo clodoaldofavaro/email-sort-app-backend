@@ -45,8 +45,8 @@ router.get('/category/:categoryId', authenticateToken, async (req, res) => {
         page: parseInt(page),
         limit: parseInt(limit),
         total: parseInt(countResult.rows[0].count),
-        totalPages: Math.ceil(countResult.rows[0].count / limit)
-      }
+        totalPages: Math.ceil(countResult.rows[0].count / limit),
+      },
     });
   } catch (error) {
     console.error('Error fetching emails:', error);
@@ -95,7 +95,7 @@ router.delete('/bulk', authenticateToken, async (req, res) => {
 
     res.json({
       message: `Successfully deleted ${result.rows.length} emails`,
-      deletedIds: result.rows.map(row => row.id)
+      deletedIds: result.rows.map(row => row.id),
     });
   } catch (error) {
     console.error('Error deleting emails:', error);
@@ -130,7 +130,7 @@ router.post('/bulk/unsubscribe', authenticateToken, async (req, res) => {
           subject: email.subject,
           sender: email.sender,
           success,
-          link: email.unsubscribe_link
+          link: email.unsubscribe_link,
         });
 
         if (success) {
@@ -148,7 +148,7 @@ router.post('/bulk/unsubscribe', authenticateToken, async (req, res) => {
           sender: email.sender,
           success: false,
           error: error.message,
-          link: email.unsubscribe_link
+          link: email.unsubscribe_link,
         });
       }
     }
@@ -157,7 +157,7 @@ router.post('/bulk/unsubscribe', authenticateToken, async (req, res) => {
       message: 'Unsubscribe process completed',
       results: unsubscribeResults,
       totalProcessed: result.rows.length,
-      successful: unsubscribeResults.filter(r => r.success).length
+      successful: unsubscribeResults.filter(r => r.success).length,
     });
   } catch (error) {
     console.error('Error processing unsubscribe:', error);
@@ -227,7 +227,7 @@ router.get('/stats', authenticateToken, async (req, res) => {
 
     res.json({
       overall: totalResult.rows[0],
-      byCategory: result.rows.filter(row => row.category_name)
+      byCategory: result.rows.filter(row => row.category_name),
     });
   } catch (error) {
     console.error('Error fetching email stats:', error);

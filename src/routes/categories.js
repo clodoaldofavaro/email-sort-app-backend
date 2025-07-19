@@ -8,7 +8,7 @@ const router = express.Router();
 // Validation schema
 const categorySchema = Joi.object({
   name: Joi.string().required().max(100).trim(),
-  description: Joi.string().required().max(500).trim()
+  description: Joi.string().required().max(500).trim(),
 });
 
 // Get all categories for user
@@ -23,7 +23,7 @@ router.get('/', authenticateToken, async (req, res) => {
        ORDER BY c.created_at DESC`,
       [req.user.id]
     );
-    
+
     res.json(result.rows);
   } catch (error) {
     console.error('Error fetching categories:', error);
@@ -35,11 +35,11 @@ router.get('/', authenticateToken, async (req, res) => {
 router.get('/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    
-    const result = await db.query(
-      'SELECT * FROM categories WHERE id = $1 AND user_id = $2',
-      [id, req.user.id]
-    );
+
+    const result = await db.query('SELECT * FROM categories WHERE id = $1 AND user_id = $2', [
+      id,
+      req.user.id,
+    ]);
 
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Category not found' });
@@ -127,14 +127,11 @@ router.delete('/:id', authenticateToken, async (req, res) => {
     const { id } = req.params;
 
     // Check if category has emails
-    const emailCount = await db.query(
-      'SELECT COUNT(*) FROM emails WHERE category_id = $1',
-      [id]
-    );
+    const emailCount = await db.query('SELECT COUNT(*) FROM emails WHERE category_id = $1', [id]);
 
     if (parseInt(emailCount.rows[0].count) > 0) {
-      return res.status(400).json({ 
-        error: 'Cannot delete category with emails. Please move or delete emails first.' 
+      return res.status(400).json({
+        error: 'Cannot delete category with emails. Please move or delete emails first.',
       });
     }
 

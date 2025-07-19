@@ -12,7 +12,7 @@ const authenticateToken = async (req, res, next) => {
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     const result = await db.query('SELECT * FROM users WHERE id = $1', [decoded.userId]);
-    
+
     if (result.rows.length === 0) {
       return res.status(401).json({ error: 'User not found' });
     }

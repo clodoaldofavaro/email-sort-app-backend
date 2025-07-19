@@ -47,16 +47,14 @@ const categorizeEmail = async (emailContent, categories) => {
       model: 'gpt-3.5-turbo',
       messages: [{ role: 'user', content: prompt }],
       max_tokens: 50,
-      temperature: 0.1
+      temperature: 0.1,
     });
 
     const category = response.choices[0].message.content.trim();
-    
+
     // Validate that the returned category exists
-    const validCategory = categories.find(cat => 
-      cat.name.toLowerCase() === category.toLowerCase()
-    );
-    
+    const validCategory = categories.find(cat => cat.name.toLowerCase() === category.toLowerCase());
+
     return validCategory ? validCategory.name : 'Uncategorized';
   } catch (error) {
     logger.error('OpenAI categorization error:', error);
@@ -64,7 +62,7 @@ const categorizeEmail = async (emailContent, categories) => {
   }
 };
 
-const summarizeEmail = async (emailContent) => {
+const summarizeEmail = async emailContent => {
   if (!openai) {
     logger.warn('OpenAI not configured - returning basic summary');
     return `Email from ${emailContent.from || 'Unknown sender'} with subject: ${emailContent.subject || 'No subject'}`;
@@ -84,7 +82,7 @@ const summarizeEmail = async (emailContent) => {
       model: 'gpt-3.5-turbo',
       messages: [{ role: 'user', content: prompt }],
       max_tokens: 100,
-      temperature: 0.1
+      temperature: 0.1,
     });
 
     return response.choices[0].message.content.trim();

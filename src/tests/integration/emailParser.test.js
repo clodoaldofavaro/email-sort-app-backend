@@ -5,8 +5,8 @@ describe('Email Parser Utils', () => {
     it('should extract plain text content', () => {
       const payload = {
         body: {
-          data: Buffer.from('Hello world').toString('base64')
-        }
+          data: Buffer.from('Hello world').toString('base64'),
+        },
       };
 
       const result = extractEmailContent(payload);
@@ -19,16 +19,16 @@ describe('Email Parser Utils', () => {
           {
             mimeType: 'text/plain',
             body: {
-              data: Buffer.from('Plain text content').toString('base64')
-            }
+              data: Buffer.from('Plain text content').toString('base64'),
+            },
           },
           {
             mimeType: 'text/html',
             body: {
-              data: Buffer.from('<p>HTML content</p>').toString('base64')
-            }
-          }
-        ]
+              data: Buffer.from('<p>HTML content</p>').toString('base64'),
+            },
+          },
+        ],
       };
 
       const result = extractEmailContent(payload);
@@ -38,9 +38,7 @@ describe('Email Parser Utils', () => {
 
   describe('extractUnsubscribeLinks', () => {
     it('should extract unsubscribe links from headers', () => {
-      const headers = [
-        { name: 'List-Unsubscribe', value: '<https://example.com/unsubscribe>' }
-      ];
+      const headers = [{ name: 'List-Unsubscribe', value: '<https://example.com/unsubscribe>' }];
 
       const result = extractUnsubscribeLinks('', headers);
       expect(result).toBe('https://example.com/unsubscribe');
@@ -48,7 +46,7 @@ describe('Email Parser Utils', () => {
 
     it('should extract unsubscribe links from body', () => {
       const body = 'Click here to <a href="https://example.com/unsubscribe">unsubscribe</a>';
-      
+
       const result = extractUnsubscribeLinks(body, []);
       expect(result).toBe('https://example.com/unsubscribe');
     });

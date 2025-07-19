@@ -14,7 +14,7 @@ pool.on('connect', () => {
   logger.info('Connected to PostgreSQL database');
 });
 
-pool.on('error', (err) => {
+pool.on('error', err => {
   logger.error('Database connection error:', err);
 });
 
