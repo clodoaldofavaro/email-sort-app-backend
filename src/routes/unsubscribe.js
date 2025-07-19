@@ -5,7 +5,7 @@ const { authenticateToken } = require('../middleware/auth');
 const unsubscribeService = require('../services/unsubscribe');
 
 // POST /api/unsubscribe
-router.post('/unsubscribe', requireAuth, async (req, res) => {
+router.post('/unsubscribe', authenticateToken, async (req, res) => {
   try {
     const { emailId, unsubscribeLink } = req.body;
 
@@ -119,7 +119,7 @@ router.post('/unsubscribe', requireAuth, async (req, res) => {
 });
 
 // POST /api/unsubscribe/batch - Handle multiple emails at once
-router.post('/unsubscribe/batch', requireAuth, async (req, res) => {
+router.post('/unsubscribe/batch', authenticateToken, async (req, res) => {
   try {
     const { emailIds } = req.body;
 
