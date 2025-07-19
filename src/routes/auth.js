@@ -23,6 +23,8 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
 
 // Generate Google OAuth URL
 router.get('/google', (req, res) => {
+  const { state } = req.query; // 'login' or 'add_account'
+  
   const scopes = [
     'https://www.googleapis.com/auth/gmail.modify',
     'https://www.googleapis.com/auth/gmail.readonly',
@@ -35,6 +37,27 @@ router.get('/google', (req, res) => {
     scope: scopes,
     prompt: 'consent',
     include_granted_scopes: true,
+    state: state || 'login', // Pass state to identify the flow
+  });
+
+  res.json({ url });
+});
+
+// Generate Google OAuth URL for adding an account (requires authentication)
+router.get('/google/add-account', authenticateToken, (req, res) => {
+  const scopes = [
+    'https://www.googleapis.com/auth/gmail.modify',
+    'https://www.googleapis.com/auth/gmail.readonly',
+    'https://www.googleapis.com/auth/userinfo.email',
+    'https://www.googleapis.com/auth/userinfo.profile',
+  ];
+
+  const url = oauth2Client.generateAuthUrl({
+    access_type: 'offline',
+    scope: scopes,
+    prompt: 'consent',
+    include_granted_scopes: true,
+    state: `add_account:${req.user.id}`, // Include user ID in state
   });
 
   res.json({ url });
@@ -42,7 +65,7 @@ router.get('/google', (req, res) => {
 
 // Handle Google OAuth callback
 router.post('/google/callback', async (req, res) => {
-  const { code } = req.body;
+  const { code, state } = req.body;
 
   if (!code) {
     logger.warn('OAuth callback called without authorization code');
@@ -66,6 +89,39 @@ router.post('/google/callback', async (req, res) => {
 
     const { id, email, name, picture } = userInfo.data;
     logger.info(`Retrieved user info for: ${email}`);
+
+    // Check if this is an add_account flow
+    if (state && state.startsWith('add_account:')) {
+      const userId = parseInt(state.split(':')[1]);
+      logger.info(`Adding account ${email} for user ID: ${userId}`);
+      
+      // Check if this email is already connected to this user
+      const existingAccount = await db.query(
+        'SELECT id FROM email_accounts WHERE user_id = $1 AND email = $2',
+        [userId, email]
+      );
+
+      if (existingAccount.rows.length > 0) {
+        return res.status(400).json({ 
+          error: 'This email account is already connected',
+          flow: 'add_account'
+        });
+      }
+
+      // Add new email account
+      await db.query(
+        `INSERT INTO email_accounts (user_id, email, access_token, refresh_token, provider)
+         VALUES ($1, $2, $3, $4, 'google')`,
+        [userId, email, tokens.access_token, tokens.refresh_token]
+      );
+
+      return res.json({
+        success: true,
+        flow: 'add_account',
+        message: 'Gmail account connected successfully',
+        email: email
+      });
+    }
 
     // Check if user exists
     let result = await db.query('SELECT * FROM users WHERE google_id = $1', [id]);
