@@ -163,7 +163,7 @@ router.get('/:id/stats', authenticateToken, async (req, res) => {
     const statsResult = await db.query(
       `SELECT 
         COUNT(*) as total_emails,
-        COUNT(CASE WHEN unsubscribed = true THEN 1 END) as unsubscribed_count,
+        COUNT(CASE WHEN unsubscribe_status = 'completed' THEN 1 END) as unsubscribed_count,
         COUNT(DISTINCT sender) as unique_senders,
         MIN(received_at) as oldest_email,
         MAX(received_at) as newest_email

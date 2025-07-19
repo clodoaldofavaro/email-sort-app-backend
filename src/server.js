@@ -10,6 +10,7 @@ const authRoutes = require('./routes/auth');
 const categoryRoutes = require('./routes/categories');
 const emailRoutes = require('./routes/emails');
 const accountRoutes = require('./routes/accounts');
+const unsubscribeRoutes = require('./routes/unsubscribe');
 const { scheduleEmailProcessing } = require('./jobs/emailProcessor');
 
 const app = express();
@@ -53,6 +54,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api/emails', emailRoutes);
 app.use('/api/accounts', accountRoutes);
+app.use('/api', unsubscribeRoutes);
 
 // Health check
 app.get('/health', async (req, res) => {

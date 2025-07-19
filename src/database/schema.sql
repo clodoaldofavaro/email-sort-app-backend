@@ -53,8 +53,6 @@ CREATE TABLE IF NOT EXISTS emails (
     body TEXT NOT NULL,
     ai_summary TEXT,
     unsubscribe_link TEXT,
-    unsubscribed BOOLEAN DEFAULT false,
-    unsubscribed_at TIMESTAMP,
     received_at TIMESTAMP NOT NULL,
     processed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -74,7 +72,6 @@ CREATE INDEX IF NOT EXISTS idx_emails_account_id ON emails(account_id);
 CREATE INDEX IF NOT EXISTS idx_emails_gmail_id ON emails(gmail_id);
 CREATE INDEX IF NOT EXISTS idx_emails_sender ON emails(sender);
 CREATE INDEX IF NOT EXISTS idx_emails_received_at ON emails(received_at);
-CREATE INDEX IF NOT EXISTS idx_emails_unsubscribed ON emails(unsubscribed);
 
 -- Add updated_at triggers
 CREATE OR REPLACE FUNCTION update_updated_at_column()

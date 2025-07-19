@@ -3,7 +3,6 @@ const Joi = require('joi');
 const db = require('../config/database');
 const { authenticateToken } = require('../middleware/auth');
 const { getGmailClient } = require('../services/gmail');
-const { processUnsubscribe } = require('../services/browserbase');
 
 const router = express.Router();
 
@@ -103,67 +102,6 @@ router.delete('/bulk', authenticateToken, async (req, res) => {
   }
 });
 
-// Bulk unsubscribe from emails
-router.post('/bulk/unsubscribe', authenticateToken, async (req, res) => {
-  try {
-    const { emailIds } = req.body;
-
-    if (!Array.isArray(emailIds) || emailIds.length === 0) {
-      return res.status(400).json({ error: 'Email IDs array is required' });
-    }
-
-    const placeholders = emailIds.map((_, index) => `$${index + 2}`).join(',');
-    const result = await db.query(
-      `SELECT id, subject, sender, unsubscribe_link 
-       FROM emails 
-       WHERE id IN (${placeholders}) AND user_id = $1 AND unsubscribe_link IS NOT NULL`,
-      [req.user.id, ...emailIds]
-    );
-
-    const unsubscribeResults = [];
-
-    for (const email of result.rows) {
-      try {
-        const success = await processUnsubscribe(email.unsubscribe_link);
-        unsubscribeResults.push({
-          emailId: email.id,
-          subject: email.subject,
-          sender: email.sender,
-          success,
-          link: email.unsubscribe_link,
-        });
-
-        if (success) {
-          // Mark as unsubscribed
-          await db.query(
-            'UPDATE emails SET unsubscribed = true, unsubscribed_at = NOW() WHERE id = $1',
-            [email.id]
-          );
-        }
-      } catch (error) {
-        console.error(`Error unsubscribing from email ${email.id}:`, error);
-        unsubscribeResults.push({
-          emailId: email.id,
-          subject: email.subject,
-          sender: email.sender,
-          success: false,
-          error: error.message,
-          link: email.unsubscribe_link,
-        });
-      }
-    }
-
-    res.json({
-      message: 'Unsubscribe process completed',
-      results: unsubscribeResults,
-      totalProcessed: result.rows.length,
-      successful: unsubscribeResults.filter(r => r.success).length,
-    });
-  } catch (error) {
-    console.error('Error processing unsubscribe:', error);
-    res.status(500).json({ error: 'Failed to process unsubscribe requests' });
-  }
-});
 
 // Move email to different category
 router.put('/:id/category', authenticateToken, async (req, res) => {
@@ -204,7 +142,7 @@ router.get('/stats/overview', authenticateToken, async (req, res) => {
     const overallResult = await db.query(
       `SELECT 
         COUNT(*) as total_emails,
-        COUNT(CASE WHEN unsubscribed = true THEN 1 END) as unsubscribed_count,
+        COUNT(CASE WHEN unsubscribe_status = 'completed' THEN 1 END) as unsubscribed_count,
         COUNT(DISTINCT sender) as unique_senders,
         COUNT(CASE WHEN received_at >= CURRENT_DATE - INTERVAL '7 days' THEN 1 END) as last_7_days,
         COUNT(CASE WHEN unsubscribe_link IS NOT NULL THEN 1 END) as with_unsubscribe_link,
