@@ -197,8 +197,8 @@ router.put('/:id/category', authenticateToken, async (req, res) => {
   }
 });
 
-// Get user's email stats
-router.get('/stats', authenticateToken, async (req, res) => {
+// Get user's email stats overview
+router.get('/stats/overview', authenticateToken, async (req, res) => {
   try {
     const result = await db.query(
       `SELECT 

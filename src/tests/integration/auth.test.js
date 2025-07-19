@@ -5,7 +5,7 @@ const db = require('../../config/database');
 describe('Authentication Integration Tests', () => {
   beforeAll(async () => {
     // Clean up test data
-    await db.query("DELETE FROM users WHERE email LIKE '%test%'");
+    await db.query('DELETE FROM users WHERE email LIKE \'%test%\'');
   });
 
   afterAll(async () => {
