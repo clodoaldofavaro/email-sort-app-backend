@@ -2,7 +2,7 @@ const express = require('express');
 const Joi = require('joi');
 const db = require('../config/database');
 const { authenticateToken } = require('../middleware/auth');
-const { getGmailClient } = require('../services/gmail');
+const { getGmailClient, processNewEmails } = require('../services/gmail');
 
 const router = express.Router();
 
@@ -132,6 +132,49 @@ router.put('/:id/category', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error('Error moving email:', error);
     res.status(500).json({ error: 'Failed to move email' });
+  }
+});
+
+// Process emails for all user's accounts
+router.post('/process', authenticateToken, async (req, res) => {
+  try {
+    // Get all user's email accounts
+    const accountsResult = await db.query(
+      'SELECT email FROM email_accounts WHERE user_id = $1',
+      [req.user.id]
+    );
+
+    if (accountsResult.rows.length === 0) {
+      return res.status(404).json({ error: 'No email accounts found' });
+    }
+
+    // Process emails for all accounts
+    const results = [];
+    for (const account of accountsResult.rows) {
+      try {
+        const processed = await processNewEmails(req.user.id, account.email);
+        results.push({
+          account: account.email,
+          status: 'success',
+          processed: processed
+        });
+      } catch (error) {
+        console.error(`Error processing emails for ${account.email}:`, error);
+        results.push({
+          account: account.email,
+          status: 'error',
+          error: error.message
+        });
+      }
+    }
+
+    res.json({
+      message: 'Email processing completed',
+      accounts: results
+    });
+  } catch (error) {
+    console.error('Error processing emails:', error);
+    res.status(500).json({ error: 'Failed to process emails' });
   }
 });
 
