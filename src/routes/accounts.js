@@ -245,6 +245,7 @@ router.get('/:id/test', authenticateToken, async (req, res) => {
       });
 
       res.json({
+        connected: true,
         status: 'connected',
         account: {
           id: account.id,
@@ -272,6 +273,7 @@ router.get('/:id/test', authenticateToken, async (req, res) => {
           );
 
           res.json({
+            connected: true,
             status: 'reconnected',
             message: 'Account tokens were expired but have been refreshed successfully',
             account: {
@@ -282,6 +284,7 @@ router.get('/:id/test', authenticateToken, async (req, res) => {
           });
         } catch (refreshError) {
           res.status(401).json({
+            connected: false,
             status: 'disconnected',
             error: 'Account authentication failed. Please reconnect the account.',
             account: {
@@ -298,6 +301,7 @@ router.get('/:id/test', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error('Error testing account connection:', error);
     res.status(500).json({ 
+      connected: false,
       status: 'error',
       error: 'Failed to test account connection',
       details: error.message,
