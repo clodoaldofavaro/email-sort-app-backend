@@ -200,34 +200,47 @@ router.put('/:id/category', authenticateToken, async (req, res) => {
 // Get user's email stats overview
 router.get('/stats/overview', authenticateToken, async (req, res) => {
   try {
-    const result = await db.query(
+    // Get overall stats including last 7 days
+    const overallResult = await db.query(
       `SELECT 
         COUNT(*) as total_emails,
         COUNT(CASE WHEN unsubscribed = true THEN 1 END) as unsubscribed_count,
         COUNT(DISTINCT sender) as unique_senders,
+        COUNT(CASE WHEN received_at >= CURRENT_DATE - INTERVAL '7 days' THEN 1 END) as last_7_days,
+        COUNT(CASE WHEN unsubscribe_link IS NOT NULL THEN 1 END) as with_unsubscribe_link,
+        COUNT(DISTINCT category_id) as categories_used
+       FROM emails WHERE user_id = $1`,
+      [req.user.id]
+    );
+
+    // Get category breakdown
+    const categoryResult = await db.query(
+      `SELECT 
         c.name as category_name,
         c.id as category_id,
         COUNT(e.id) as category_count
-       FROM emails e
-       LEFT JOIN categories c ON e.category_id = c.id
-       WHERE e.user_id = $1
+       FROM categories c
+       LEFT JOIN emails e ON e.category_id = c.id AND e.user_id = $1
+       WHERE c.user_id = $1
        GROUP BY c.id, c.name
        ORDER BY category_count DESC`,
       [req.user.id]
     );
 
-    const totalResult = await db.query(
-      `SELECT 
-        COUNT(*) as total_emails,
-        COUNT(CASE WHEN unsubscribed = true THEN 1 END) as unsubscribed_count,
-        COUNT(DISTINCT sender) as unique_senders
-       FROM emails WHERE user_id = $1`,
-      [req.user.id]
-    );
-
     res.json({
-      overall: totalResult.rows[0],
-      byCategory: result.rows.filter(row => row.category_name),
+      overview: {
+        total_emails: parseInt(overallResult.rows[0].total_emails),
+        last_7_days: parseInt(overallResult.rows[0].last_7_days),
+        categories_used: parseInt(overallResult.rows[0].categories_used),
+        unique_senders: parseInt(overallResult.rows[0].unique_senders),
+        unsubscribed_count: parseInt(overallResult.rows[0].unsubscribed_count),
+        with_unsubscribe_link: parseInt(overallResult.rows[0].with_unsubscribe_link)
+      },
+      byCategory: categoryResult.rows.map(row => ({
+        category_name: row.category_name,
+        category_id: row.category_id,
+        count: parseInt(row.category_count)
+      }))
     });
   } catch (error) {
     console.error('Error fetching email stats:', error);
