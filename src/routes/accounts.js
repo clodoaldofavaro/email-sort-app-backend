@@ -207,4 +207,102 @@ router.post('/:id/refresh', authenticateToken, async (req, res) => {
   }
 });
 
+// Test account connection
+router.get('/:id/test', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Get account details
+    const accountResult = await db.query(
+      'SELECT * FROM email_accounts WHERE id = $1 AND user_id = $2',
+      [id, req.user.id]
+    );
+
+    if (accountResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Account not found' });
+    }
+
+    const account = accountResult.rows[0];
+
+    // Set up OAuth client with stored tokens
+    oauth2Client.setCredentials({
+      access_token: account.access_token,
+      refresh_token: account.refresh_token,
+    });
+
+    // Try to access Gmail API to test the connection
+    const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
+    
+    try {
+      // Get user's Gmail profile to test connection
+      const profile = await gmail.users.getProfile({ userId: 'me' });
+      
+      // Get a sample of recent messages to show the connection is working
+      const messages = await gmail.users.messages.list({
+        userId: 'me',
+        maxResults: 5,
+        q: 'is:unread',
+      });
+
+      res.json({
+        status: 'connected',
+        account: {
+          id: account.id,
+          email: account.email,
+          provider: account.provider,
+        },
+        profile: {
+          emailAddress: profile.data.emailAddress,
+          messagesTotal: profile.data.messagesTotal,
+          threadsTotal: profile.data.threadsTotal,
+        },
+        recentUnreadCount: messages.data.messages ? messages.data.messages.length : 0,
+        lastTested: new Date().toISOString(),
+      });
+    } catch (gmailError) {
+      // If Gmail API fails, try to refresh the token
+      if (gmailError.code === 401) {
+        try {
+          const { credentials } = await oauth2Client.refreshAccessToken();
+          
+          // Update stored tokens
+          await db.query(
+            'UPDATE email_accounts SET access_token = $1, updated_at = NOW() WHERE id = $2',
+            [credentials.access_token, id]
+          );
+
+          res.json({
+            status: 'reconnected',
+            message: 'Account tokens were expired but have been refreshed successfully',
+            account: {
+              id: account.id,
+              email: account.email,
+              provider: account.provider,
+            },
+          });
+        } catch (refreshError) {
+          res.status(401).json({
+            status: 'disconnected',
+            error: 'Account authentication failed. Please reconnect the account.',
+            account: {
+              id: account.id,
+              email: account.email,
+              provider: account.provider,
+            },
+          });
+        }
+      } else {
+        throw gmailError;
+      }
+    }
+  } catch (error) {
+    console.error('Error testing account connection:', error);
+    res.status(500).json({ 
+      status: 'error',
+      error: 'Failed to test account connection',
+      details: error.message,
+    });
+  }
+});
+
 module.exports = router;
