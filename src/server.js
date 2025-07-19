@@ -16,6 +16,9 @@ const { scheduleEmailProcessing } = require('./jobs/emailProcessor');
 const app = express();
 const PORT = process.env.PORT || 8080;
 
+// Trust proxy headers (required for Fly.io and other proxies)
+app.set('trust proxy', true);
+
 // Security middleware
 app.use(
   helmet({

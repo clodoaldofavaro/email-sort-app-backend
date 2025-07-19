@@ -45,17 +45,27 @@ router.post('/google/callback', async (req, res) => {
   const { code } = req.body;
 
   if (!code) {
+    logger.warn('OAuth callback called without authorization code');
     return res.status(400).json({ error: 'Authorization code required' });
   }
 
+  // Log the authorization code (first and last 4 chars for debugging)
+  const codePreview = `${code.substring(0, 4)}...${code.substring(code.length - 4)}`;
+  const requestTime = new Date().toISOString();
+  logger.info(`[${requestTime}] Processing OAuth callback with code: ${codePreview}`);
+
   try {
+    logger.info('Exchanging authorization code for tokens...');
     const { tokens } = await oauth2Client.getToken(code);
+    logger.info(`Successfully obtained tokens for code: ${codePreview}`);
+    
     oauth2Client.setCredentials(tokens);
 
     const oauth2 = google.oauth2({ version: 'v2', auth: oauth2Client });
     const userInfo = await oauth2.userinfo.get();
 
     const { id, email, name, picture } = userInfo.data;
+    logger.info(`Retrieved user info for: ${email}`);
 
     // Check if user exists
     let result = await db.query('SELECT * FROM users WHERE google_id = $1', [id]);
@@ -121,7 +131,25 @@ router.post('/google/callback', async (req, res) => {
       },
     });
   } catch (error) {
-    logger.error('Auth error:', error);
+    // Enhanced error logging
+    if (error.message === 'invalid_grant') {
+      logger.error(`Invalid grant error for code: ${codePreview}. This usually means:`);
+      logger.error('1. The authorization code was already used');
+      logger.error('2. The authorization code has expired');
+      logger.error('3. The redirect URI mismatch');
+      logger.error('Full error details:', {
+        message: error.message,
+        code: error.code,
+        errors: error.errors,
+        config: error.config ? {
+          url: error.config.url,
+          data: 'REDACTED'
+        } : undefined
+      });
+    } else {
+      logger.error(`Auth error for code ${codePreview}:`, error);
+    }
+    
     res.status(400).json({
       error: 'Authentication failed',
       message: error.message,
