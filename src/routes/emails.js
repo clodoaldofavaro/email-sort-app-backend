@@ -10,7 +10,7 @@ const router = express.Router();
 router.get('/category/:categoryId', authenticateToken, async (req, res) => {
   try {
     const { categoryId } = req.params;
-    const { page = 1, limit = 20 } = req.query;
+    const { page = 1, limit = 20, accountId } = req.query;
     const offset = (page - 1) * limit;
 
     // Verify category belongs to user
@@ -23,19 +23,39 @@ router.get('/category/:categoryId', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'Category not found' });
     }
 
+    // Build query with optional account filter
+    let whereClause = 'WHERE e.category_id = $1 AND e.user_id = $2';
+    const queryParams = [categoryId, req.user.id];
+    
+    if (accountId) {
+      // Verify account belongs to user
+      const accountResult = await db.query(
+        'SELECT id FROM email_accounts WHERE id = $1 AND user_id = $2',
+        [accountId, req.user.id]
+      );
+      
+      if (accountResult.rows.length === 0) {
+        return res.status(404).json({ error: 'Account not found' });
+      }
+      
+      whereClause += ' AND e.account_id = $3';
+      queryParams.push(accountId);
+    }
+
     const result = await db.query(
-      `SELECT e.*, c.name as category_name 
+      `SELECT e.*, c.name as category_name, ea.email as account_email
        FROM emails e
        JOIN categories c ON e.category_id = c.id
-       WHERE e.category_id = $1 AND e.user_id = $2
+       LEFT JOIN email_accounts ea ON e.account_id = ea.id
+       ${whereClause}
        ORDER BY e.received_at DESC
-       LIMIT $3 OFFSET $4`,
-      [categoryId, req.user.id, limit, offset]
+       LIMIT $${queryParams.length + 1} OFFSET $${queryParams.length + 2}`,
+      [...queryParams, limit, offset]
     );
 
     const countResult = await db.query(
-      'SELECT COUNT(*) FROM emails WHERE category_id = $1 AND user_id = $2',
-      [categoryId, req.user.id]
+      `SELECT COUNT(*) FROM emails e ${whereClause}`,
+      queryParams
     );
 
     res.json({
