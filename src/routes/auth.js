@@ -12,6 +12,14 @@ const oauth2Client = new google.auth.OAuth2(
   process.env.GOOGLE_REDIRECT_URI || 'https://email-sorting-frontend.fly.dev/callback'
 );
 
+// Log Google OAuth configuration status
+if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
+  console.log('✅ Google OAuth configured successfully');
+  console.log('📍 Redirect URI:', process.env.GOOGLE_REDIRECT_URI || 'https://email-sorting-frontend.fly.dev/callback');
+} else {
+  console.warn('⚠️ Google OAuth not fully configured');
+}
+
 // Generate Google OAuth URL
 router.get('/google', (req, res) => {
   const scopes = [
