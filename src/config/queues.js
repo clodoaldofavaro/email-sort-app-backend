@@ -1,5 +1,5 @@
 // const { Queue } = require('bullmq');
-const redis = require('redis');
+const Redis = require('ioredis');
 const logger = require('../utils/logger');
 
 // Log all Redis-related environment variables for debugging
@@ -41,20 +41,8 @@ try {
     port: redisPort,
   });
 
-  // Create connection using redis package like redisCache.js
-  redisConnection = redis.createClient({
-    url: redisUrl,
-    socket: {
-      connectTimeout: 5000,
-      reconnectStrategy: (retries) => {
-        if (retries > 10) {
-          logger.error('Too many Redis queue reconnection attempts');
-          return new Error('Too many retries');
-        }
-        return Math.min(retries * 100, 3000);
-      }
-    }
-  });
+  // Create connection using ioredis with family 6 option
+  redisConnection = new Redis(redisUrl, { family: 6 });
 
   // Test the connection
   redisConnection.on('connect', () => {
@@ -80,16 +68,7 @@ try {
     logger.info('Reconnecting to Redis Queue...');
   });
   
-  // Connect to Redis
-  (async () => {
-    try {
-      await redisConnection.connect();
-    } catch (error) {
-      logger.error('Failed to connect to Redis Queue:', error);
-      isConnected = false;
-    }
-  })();
-  logger.info('Redis Queue client created, attempting to connect...');
+  logger.info('Redis Queue client created with ioredis and family: 6');
 } catch (error) {
   logger.error('Failed to create Redis connection:');
   throw error;
@@ -117,7 +96,7 @@ setTimeout(async () => {
       const testValue = 'Queue Redis Connected at ' + new Date().toISOString();
 
       logger.info('Testing Queue Redis connection with set/get...');
-      await redisConnection.setEx(testKey, 60, testValue); // 60 second TTL
+      await redisConnection.setex(testKey, 60, testValue); // 60 second TTL
 
       const retrievedValue = await redisConnection.get(testKey);
       if (retrievedValue === testValue) {
