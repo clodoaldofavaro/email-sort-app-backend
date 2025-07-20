@@ -1,11 +1,11 @@
-const { Worker } = require('bullmq');
+// const { Worker } = require('bullmq');
 const Redis = require('ioredis');
-const { unsubscribeQueue } = require('../config/queues');
-const db = require('../config/database');
-const unsubscribeService = require('../services/unsubscribe');
+// const { unsubscribeQueue } = require('../config/queues');
+// const db = require('../config/database');
+// const unsubscribeService = require('../services/unsubscribe');
 const logger = require('../utils/logger');
 
-logger.info('Starting unsubscribe worker initialization...');
+logger.info('Redis connection test for worker file...');
 
 // Create Redis connection for worker following same pattern as redisCache.js
 let connection;
@@ -70,9 +70,9 @@ connection.on('close', () => {
   logger.warn('Worker Redis connection closed');
 });
 
+/* COMMENTING OUT ALL WORKER CODE - TESTING REDIS CONNECTION ONLY
 // Process unsubscribe jobs using BullMQ Worker
 let unsubscribeWorker;
-/* COMMENTING OUT WORKER TO TEST QUEUE CONNECTION
 try {
   logger.info('Creating BullMQ Worker for unsubscribe queue...');
 
@@ -298,7 +298,8 @@ unsubscribeWorker.on('error', error => {
 });
 */
 
-// Clean up completed jobs periodically
+// Clean up completed jobs periodically - DISABLED
+/*
 setInterval(
   async () => {
     try {
@@ -312,6 +313,7 @@ setInterval(
   },
   60 * 60 * 1000
 ); // Run every hour
+*/
 
 // Test Redis connection on startup
 setTimeout(async () => {
@@ -332,12 +334,14 @@ setTimeout(async () => {
         value: retrievedValue 
       });
       
-      // Test queue operations
+      // Queue operations disabled - testing Redis only
+      /*
       const counts = await unsubscribeQueue.getJobCounts();
       logger.info('Unsubscribe queue job counts:', counts);
       
       const waitingJobs = await unsubscribeQueue.getWaitingCount();
       logger.info('Unsubscribe queue waiting jobs:', waitingJobs);
+      */
     } else {
       logger.error('Worker Redis test failed - value mismatch', {
         expected: testValue,
@@ -356,7 +360,7 @@ setTimeout(async () => {
   }
 }, 2000); // Wait 2 seconds for connection to establish
 
-logger.info('Unsubscribe worker started and processing jobs');
+logger.info('Redis connection test complete');
 
 // Graceful shutdown
 process.on('SIGTERM', async () => {
@@ -372,5 +376,5 @@ process.on('SIGTERM', async () => {
   process.exit(0);
 });
 
-// module.exports = unsubscribeWorker;
-module.exports = {}; // Export empty object for now
+// No exports - just testing Redis connection
+module.exports = {};
