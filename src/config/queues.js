@@ -31,6 +31,10 @@ try {
     maxRetriesPerRequest: null,
     enableReadyCheck: false,
     tls: {},
+    family: 6,
+    host: process.env.REDIS_QUEUE_HOST,
+    port: process.env.REDIS_QUEUE_PORT,
+    password: process.env.REDIS_QUEUE_PASSWORD,
   });
 
   // Test the connection
@@ -77,6 +81,11 @@ logger.info('BullMQ queues created successfully', {
     logger.error('Failed to connect Bull queues to Redis', {
       error: error.message,
       stack: error.stack,
+      code: error.code,
+      errno: error.errno,
+      syscall: error.syscall,
+      hostname: error.hostname,
+      fullError: JSON.stringify(error, null, 2),
     });
   }
 })();

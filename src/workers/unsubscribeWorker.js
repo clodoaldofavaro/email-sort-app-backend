@@ -21,10 +21,14 @@ logger.info('Creating Redis connection for worker', {
 let connection;
 
 try {
-  connection = new Redis(redisUrl, {
+  connection = new Redis({
     maxRetriesPerRequest: null,
     enableReadyCheck: false,
+    host: process.env.REDIS_QUEUE_HOST,
+    port: process.env.REDIS_QUEUE_PORT,
+    password: process.env.REDIS_QUEUE_PASSWORD,
     tls: {},
+    family: 6,
   });
 } catch (error) {
   logger.error('Error connecting worker to Redis', { url: redisUrl, connection });
@@ -290,11 +294,11 @@ setInterval(
 (async () => {
   try {
     logger.info('Testing Redis connection for unsubscribe queue...');
-    
+
     // BullMQ doesn't have isReady(), use getJobCounts() to test connection
     const counts = await unsubscribeQueue.getJobCounts();
     logger.info('Unsubscribe queue job counts:', counts);
-    
+
     // Also test if we can get waiting jobs
     const waitingJobs = await unsubscribeQueue.getWaitingCount();
     logger.info('Unsubscribe queue waiting jobs:', waitingJobs);
