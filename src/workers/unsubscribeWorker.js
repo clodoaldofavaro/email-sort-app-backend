@@ -130,6 +130,7 @@ try {
             JSON.stringify({
               message: unsubscribeResult.message,
               details: unsubscribeResult.details,
+              sessionId: unsubscribeResult.sessionId,
               timestamp: new Date().toISOString(),
             }),
             emailId,

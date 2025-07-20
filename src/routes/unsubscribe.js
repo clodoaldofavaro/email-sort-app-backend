@@ -72,6 +72,7 @@ router.post('/unsubscribe/batch', authenticateToken, async (req, res) => {
             JSON.stringify({
               message: unsubscribeResult.message,
               details: unsubscribeResult.details,
+              sessionId: unsubscribeResult.sessionId,
               timestamp: new Date().toISOString()
             }),
             email.id

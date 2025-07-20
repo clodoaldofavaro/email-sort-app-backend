@@ -35,10 +35,15 @@ class UnsubscribeService {
 
   async unsubscribeFromEmail(unsubscribeLink) {
     let stagehand = null;
+    let sessionId = null;
 
     try {
       stagehand = await this.initializeStagehand();
       const page = stagehand.page;
+      
+      // Get the Browserbase session ID for replay
+      sessionId = stagehand.sessionId;
+      logger.info(`Browserbase session ID: ${sessionId}`);
 
       logger.info(`Navigating to unsubscribe link: ${unsubscribeLink}`);
 
@@ -98,6 +103,7 @@ class UnsubscribeService {
             success: true,
             message: 'Already unsubscribed',
             details: pageAnalysis.description,
+            sessionId: sessionId,
           };
           logger.info('Unsubscribe result - already unsubscribed:', alreadyUnsubscribedResult);
           return alreadyUnsubscribedResult;
@@ -107,6 +113,7 @@ class UnsubscribeService {
             success: true,
             message: 'Unsubscribed successfully',
             details: pageAnalysis.description,
+            sessionId: sessionId,
           };
           logger.info('Unsubscribe result - confirmation page:', confirmationResult);
           return confirmationResult;
@@ -116,6 +123,7 @@ class UnsubscribeService {
             success: false,
             message: 'Error on unsubscribe page',
             details: pageAnalysis.errorMessage || pageAnalysis.description,
+            sessionId: sessionId,
           };
           logger.error('Unsubscribe result - error page:', errorPageResult);
           return errorPageResult;
@@ -142,6 +150,7 @@ class UnsubscribeService {
             success: result.success,
             message: result.message,
             details: result.confirmationText,
+            sessionId: sessionId,
           };
           logger.info('Unsubscribe result after action:', actionResult);
           return actionResult;
@@ -163,6 +172,7 @@ class UnsubscribeService {
             success: genericResult.success,
             message: genericResult.message,
             details: 'Generic unsubscribe attempt',
+            sessionId: sessionId,
           };
           logger.info('Unsubscribe result - generic attempt:', genericFinalResult);
           return genericFinalResult;
@@ -173,6 +183,7 @@ class UnsubscribeService {
         success: false,
         message: 'Failed to process unsubscribe',
         details: error.message,
+        sessionId: sessionId,
       };
       logger.error('Unsubscribe failed with exception:', errorResult);
       return errorResult;
