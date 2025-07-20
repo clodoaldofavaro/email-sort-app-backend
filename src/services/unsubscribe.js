@@ -50,7 +50,7 @@ class UnsubscribeService {
 
       // First, let's observe what's on the page
       const pageAnalysis = await page.extract({
-        instruction: 'Analyze this unsubscribe page and identify what actions are needed',
+        instruction: 'Analyze this unsubscribe page and identify what actions are needed. For pageType, use exactly one of these values: "form" (if there is a form to fill), "button" (if there is a button to click), "confirmation" (if already showing unsubscribe success), "already_unsubscribed" (if showing already unsubscribed message), or "error" (if showing an error page)',
         schema: z.object({
           pageType: z.enum(['form', 'button', 'confirmation', 'already_unsubscribed', 'error']),
           description: z.string(),
