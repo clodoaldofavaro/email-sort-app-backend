@@ -162,7 +162,7 @@ router.get('/:id/content', authenticateToken, async (req, res) => {
     try {
       // Get Gmail client for the account
       logger.info(`Getting Gmail client for account: ${email.account_email}`);
-      const gmail = await getGmailClient(email.account_email, email.refresh_token);
+      const { gmail } = await getGmailClient(req.user.id, email.account_email);
       logger.info('Gmail client obtained successfully');
 
       // Fetch the email from Gmail
