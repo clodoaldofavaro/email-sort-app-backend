@@ -3,6 +3,7 @@ const router = express.Router();
 const db = require('../config/database');
 const { authenticateToken } = require('../middleware/auth');
 const unsubscribeService = require('../services/unsubscribe');
+const logger = require('../utils/logger');
 
 // POST /api/unsubscribe
 router.post('/unsubscribe', authenticateToken, async (req, res) => {
@@ -25,7 +26,7 @@ router.post('/unsubscribe', authenticateToken, async (req, res) => {
       });
     }
 
-    console.log(`Processing unsubscribe for email ${emailId} by user ${req.user.id}`);
+    logger.info(`Processing unsubscribe for email ${emailId} by user ${req.user.id}`);
 
     // Verify the email belongs to the user and has an unsubscribe link
     const emailCheck = await req.db.query(
@@ -55,7 +56,9 @@ router.post('/unsubscribe', authenticateToken, async (req, res) => {
     );
 
     // Attempt to unsubscribe using Stagehand
+    logger.info(`Starting unsubscribe process for email ${emailId}`);
     const unsubscribeResult = await unsubscribeService.unsubscribeFromEmail(unsubscribeLink);
+    logger.info('Unsubscribe service response:', { emailId, result: unsubscribeResult });
 
     // Update the email record with the result
     const finalStatus = unsubscribeResult.success ? 'completed' : 'failed';
@@ -77,18 +80,25 @@ router.post('/unsubscribe', authenticateToken, async (req, res) => {
       ]
     );
 
-    // Log the attempt for debugging
-    console.log(`Unsubscribe ${unsubscribeResult.success ? 'succeeded' : 'failed'} for email ${emailId}:`, unsubscribeResult);
+    // Log the final result
+    logger.info(`Unsubscribe ${unsubscribeResult.success ? 'succeeded' : 'failed'} for email ${emailId}`, {
+      emailId,
+      success: unsubscribeResult.success,
+      message: unsubscribeResult.message,
+      details: unsubscribeResult.details
+    });
 
-    res.json({
+    const response = {
       success: unsubscribeResult.success,
       message: unsubscribeResult.message,
       details: unsubscribeResult.details,
       emailId: emailId
-    });
+    };
+    logger.info('Sending unsubscribe response:', response);
+    res.json(response);
 
   } catch (error) {
-    console.error('Unsubscribe endpoint error:', error);
+    logger.error('Unsubscribe endpoint error:', { error: error.message, stack: error.stack });
 
     // Update email status to failed if we have emailId
     if (req.body.emailId) {
@@ -107,7 +117,7 @@ router.post('/unsubscribe', authenticateToken, async (req, res) => {
           ]
         );
       } catch (updateError) {
-        console.error('Failed to update email status:', updateError);
+        logger.error('Failed to update email status:', { error: updateError.message });
       }
     }
 
@@ -151,7 +161,7 @@ router.post('/unsubscribe/batch', authenticateToken, async (req, res) => {
       });
     }
 
-    console.log(`Processing batch unsubscribe for ${result.rows.length} emails`);
+    logger.info(`Processing batch unsubscribe for ${result.rows.length} emails`);
 
     // Process each email (you might want to implement this with a queue for better performance)
     const results = [];
@@ -164,7 +174,9 @@ router.post('/unsubscribe/batch', authenticateToken, async (req, res) => {
           ['in_progress', email.id]
         );
 
+        logger.info(`Processing unsubscribe for email ${email.id} in batch`);
         const unsubscribeResult = await unsubscribeService.unsubscribeFromEmail(email.unsubscribe_link);
+        logger.info('Batch unsubscribe result:', { emailId: email.id, result: unsubscribeResult });
         
         // Update with result
         const finalStatus = unsubscribeResult.success ? 'completed' : 'failed';
@@ -193,7 +205,7 @@ router.post('/unsubscribe/batch', authenticateToken, async (req, res) => {
         });
 
       } catch (emailError) {
-        console.error(`Failed to unsubscribe from email ${email.id}:`, emailError);
+        logger.error(`Failed to unsubscribe from email ${email.id}:`, { error: emailError.message, stack: emailError.stack });
         
         await db.query(
           `UPDATE emails 
@@ -217,7 +229,7 @@ router.post('/unsubscribe/batch', authenticateToken, async (req, res) => {
       }
     }
 
-    res.json({
+    const response = {
       message: `Processed ${results.length} emails`,
       results: results,
       summary: {
@@ -225,10 +237,12 @@ router.post('/unsubscribe/batch', authenticateToken, async (req, res) => {
         successful: results.filter(r => r.success).length,
         failed: results.filter(r => !r.success).length
       }
-    });
+    };
+    logger.info('Sending batch unsubscribe response:', response);
+    res.json(response);
 
   } catch (error) {
-    console.error('Batch unsubscribe endpoint error:', error);
+    logger.error('Batch unsubscribe endpoint error:', { error: error.message, stack: error.stack });
     res.status(500).json({ 
       error: 'Internal server error during batch unsubscribe',
       message: error.message 

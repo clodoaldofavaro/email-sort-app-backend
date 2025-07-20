@@ -1,6 +1,7 @@
 // services/unsubscribeService.js
 const { Stagehand } = require('@browserbasehq/stagehand');
 const { z } = require('zod');
+const logger = require('../utils/logger');
 
 class UnsubscribeService {
   constructor() {
@@ -36,7 +37,7 @@ class UnsubscribeService {
       stagehand = await this.initializeStagehand();
       const page = stagehand.page;
 
-      console.log(`Navigating to unsubscribe link: ${unsubscribeLink}`);
+      logger.info(`Navigating to unsubscribe link: ${unsubscribeLink}`);
 
       // Navigate to the unsubscribe page
       await page.goto(unsubscribeLink, {
@@ -58,30 +59,36 @@ class UnsubscribeService {
         }),
       });
 
-      console.log('Page analysis:', pageAnalysis);
+      logger.info('Page analysis:', pageAnalysis);
 
       // Handle different types of unsubscribe pages
       switch (pageAnalysis.pageType) {
         case 'already_unsubscribed':
-          return {
+          const alreadyUnsubscribedResult = {
             success: true,
             message: 'Already unsubscribed',
             details: pageAnalysis.description,
           };
+          logger.info('Unsubscribe result - already unsubscribed:', alreadyUnsubscribedResult);
+          return alreadyUnsubscribedResult;
 
         case 'confirmation':
-          return {
+          const confirmationResult = {
             success: true,
             message: 'Unsubscribed successfully',
             details: pageAnalysis.description,
           };
+          logger.info('Unsubscribe result - confirmation page:', confirmationResult);
+          return confirmationResult;
 
         case 'error':
-          return {
+          const errorPageResult = {
             success: false,
             message: 'Error on unsubscribe page',
             details: pageAnalysis.errorMessage || pageAnalysis.description,
           };
+          logger.error('Unsubscribe result - error page:', errorPageResult);
+          return errorPageResult;
 
         case 'form':
         case 'button':
@@ -101,11 +108,13 @@ class UnsubscribeService {
             }),
           });
 
-          return {
+          const actionResult = {
             success: result.success,
             message: result.message,
             details: result.confirmationText,
           };
+          logger.info('Unsubscribe result after action:', actionResult);
+          return actionResult;
 
         default:
           // Try a generic unsubscribe attempt
@@ -120,26 +129,30 @@ class UnsubscribeService {
             }),
           });
 
-          return {
+          const genericFinalResult = {
             success: genericResult.success,
             message: genericResult.message,
             details: 'Generic unsubscribe attempt',
           };
+          logger.info('Unsubscribe result - generic attempt:', genericFinalResult);
+          return genericFinalResult;
       }
     } catch (error) {
-      console.error('Unsubscribe error:', error);
-      return {
+      logger.error('Unsubscribe error:', { error: error.message, stack: error.stack });
+      const errorResult = {
         success: false,
         message: 'Failed to process unsubscribe',
         details: error.message,
       };
+      logger.error('Unsubscribe failed with exception:', errorResult);
+      return errorResult;
     } finally {
       // Clean up the browser session
       if (stagehand) {
         try {
           await stagehand.close();
         } catch (closeError) {
-          console.error('Error closing stagehand:', closeError);
+          logger.error('Error closing stagehand:', { error: closeError.message });
         }
       }
     }
@@ -159,7 +172,7 @@ class UnsubscribeService {
 
       for (const action of actions) {
         try {
-          console.log(`Attempting action: ${action}`);
+          logger.info(`Attempting action: ${action}`);
           await page.act(action);
 
           // Wait a bit to see if the action worked
@@ -167,7 +180,7 @@ class UnsubscribeService {
 
           // Check if we've been redirected or if there's a success message
           const currentUrl = page.url();
-          console.log(`Current URL after action: ${currentUrl}`);
+          logger.info(`Current URL after action: ${currentUrl}`);
 
           // If the action seems to have worked, break out of the loop
           const quickCheck = await page.extract({
@@ -180,16 +193,16 @@ class UnsubscribeService {
           });
 
           if (quickCheck.actionWorked) {
-            console.log(`Action succeeded: ${quickCheck.reason}`);
+            logger.info(`Action succeeded: ${quickCheck.reason}`);
             break;
           }
         } catch (actionError) {
-          console.log(`Action "${action}" failed:`, actionError.message);
+          logger.debug(`Action "${action}" failed:`, { error: actionError.message });
           continue; // Try the next action
         }
       }
     } catch (error) {
-      console.error('Error performing unsubscribe action:', error);
+      logger.error('Error performing unsubscribe action:', { error: error.message, stack: error.stack });
       throw error;
     }
   }
