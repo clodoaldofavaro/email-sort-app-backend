@@ -3,8 +3,13 @@ const db = require('../config/database');
 const unsubscribeService = require('../services/unsubscribe');
 const logger = require('../utils/logger');
 
+logger.info('Starting unsubscribe worker initialization...');
+
 // Process unsubscribe jobs
-unsubscribeQueue.process('unsubscribe-email', async (job) => {
+try {
+  logger.info('Attempting to register job processor for unsubscribe-email...');
+  
+  unsubscribeQueue.process('unsubscribe-email', async (job) => {
   const { batchJobId, userId, emailId, unsubscribeLink, subject, sender } = job.data;
   
   logger.info(`Processing unsubscribe job for email ${emailId} in batch ${batchJobId}`);
@@ -165,7 +170,20 @@ unsubscribeQueue.process('unsubscribe-email', async (job) => {
     // Throw error to trigger Bull retry mechanism
     throw error;
   }
-});
+  });
+
+  logger.info('Job processor registered successfully for unsubscribe-email');
+} catch (error) {
+  logger.error('Failed to register unsubscribe job processor:', {
+    error: error.message,
+    stack: error.stack,
+    code: error.code,
+    errno: error.errno,
+    syscall: error.syscall,
+    hostname: error.hostname
+  });
+  throw error;
+}
 
 // Queue event handlers
 unsubscribeQueue.on('completed', (job, result) => {
@@ -186,7 +204,15 @@ unsubscribeQueue.on('stalled', (job) => {
 
 // Error handler for batch job failures
 unsubscribeQueue.on('error', (error) => {
-  logger.error('Unsubscribe queue error:', error);
+  logger.error('Unsubscribe queue error:', {
+    message: error.message,
+    stack: error.stack,
+    code: error.code,
+    errno: error.errno,
+    syscall: error.syscall,
+    hostname: error.hostname,
+    fullError: error
+  });
 });
 
 // Clean up completed jobs periodically
@@ -200,6 +226,26 @@ setInterval(async () => {
     logger.error('Error cleaning unsubscribe queue:', error);
   }
 }, 60 * 60 * 1000); // Run every hour
+
+// Test Redis connection on startup
+(async () => {
+  try {
+    logger.info('Testing Redis connection for unsubscribe queue...');
+    const health = await unsubscribeQueue.isReady();
+    logger.info('Unsubscribe queue Redis connection test:', { isReady: health });
+    
+    const counts = await unsubscribeQueue.getJobCounts();
+    logger.info('Unsubscribe queue job counts:', counts);
+  } catch (error) {
+    logger.error('Failed to connect to Redis for unsubscribe queue:', {
+      message: error.message,
+      code: error.code,
+      errno: error.errno,
+      syscall: error.syscall,
+      hostname: error.hostname
+    });
+  }
+})();
 
 logger.info('Unsubscribe worker started and processing jobs');
 
