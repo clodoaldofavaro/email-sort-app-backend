@@ -225,7 +225,7 @@ router.get('/unsubscribe/async/status/:jobId', authenticateToken, async (req, re
 
     // Get job status from database
     const result = await db.query(
-      `SELECT * FROM unsubscribe_jobs WHERE id = $1 AND user_id = $2`,
+      'SELECT * FROM unsubscribe_jobs WHERE id = $1 AND user_id = $2',
       [jobId, req.user.id]
     );
 

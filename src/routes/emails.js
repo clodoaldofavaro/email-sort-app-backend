@@ -107,13 +107,16 @@ router.get('/:id', authenticateToken, async (req, res) => {
 router.get('/:id/content', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
+    logger.info(`Fetching email content for ID: ${id}, User: ${req.user.id}`);
     
     // Validate that id is a number
     if (!/^\d+$/.test(id)) {
+      logger.warn(`Invalid email ID format received: ${id}`);
       return res.status(400).json({ error: 'Invalid email ID format' });
     }
 
     // First, get email metadata to get gmail_id and account info
+    logger.info(`Querying database for email metadata: ID=${id}, UserID=${req.user.id}`);
     const emailResult = await db.query(
       `SELECT e.id, e.gmail_id, e.subject, e.sender, e.account_id, ea.email as account_email, ea.refresh_token
        FROM emails e
@@ -123,17 +126,21 @@ router.get('/:id/content', authenticateToken, async (req, res) => {
     );
 
     if (emailResult.rows.length === 0) {
+      logger.warn(`Email not found: ID=${id}, UserID=${req.user.id}`);
       return res.status(404).json({ error: 'Email not found' });
     }
 
     const email = emailResult.rows[0];
+    logger.info(`Found email: ID=${email.id}, GmailID=${email.gmail_id}, AccountID=${email.account_id}, AccountEmail=${email.account_email}`);
 
     if (!email.gmail_id) {
+      logger.error(`Email missing Gmail ID: EmailID=${email.id}`);
       return res.status(400).json({ error: 'Email does not have a Gmail ID' });
     }
 
     // Check Redis cache first
     const cacheKey = `email:${email.account_id}:${email.gmail_id}`;
+    logger.info(`Checking Redis cache with key: ${cacheKey}`);
     const cachedContent = await redis.get(cacheKey);
 
     if (cachedContent) {
@@ -150,17 +157,22 @@ router.get('/:id/content', authenticateToken, async (req, res) => {
 
     // Cache miss - fetch from Gmail
     logger.info(`Cache miss for email ${id} (Gmail ID: ${email.gmail_id}), fetching from Gmail`);
+    logger.info(`Using account: ${email.account_email}`);
 
     try {
       // Get Gmail client for the account
+      logger.info(`Getting Gmail client for account: ${email.account_email}`);
       const gmail = await getGmailClient(email.account_email, email.refresh_token);
+      logger.info('Gmail client obtained successfully');
 
       // Fetch the email from Gmail
+      logger.info(`Fetching email from Gmail API: GmailID=${email.gmail_id}`);
       const gmailResponse = await gmail.users.messages.get({
         userId: 'me',
         id: email.gmail_id,
         format: 'full',
       });
+      logger.info('Gmail API response received successfully');
 
       // Extract email content
       const emailContent = {
@@ -218,12 +230,16 @@ router.get('/:id/content', authenticateToken, async (req, res) => {
 
       // Cache the content in Redis with 24-hour TTL
       const ttl = 24 * 60 * 60; // 24 hours in seconds
+      logger.info(`Caching email content in Redis: key=${cacheKey}, ttl=${ttl}s`);
       const cacheSuccess = await redis.setEx(cacheKey, ttl, JSON.stringify(content));
 
       if (!cacheSuccess) {
         logger.warn(`Failed to cache email content for email ${id}, continuing without cache`);
+      } else {
+        logger.info('Email content cached successfully');
       }
 
+      logger.info(`Returning email content: EmailID=${email.id}, ContentSize=${content.body.length} chars, Attachments=${content.attachments.length}`);
       res.json({
         id: email.id,
         gmail_id: email.gmail_id,
@@ -233,7 +249,8 @@ router.get('/:id/content', authenticateToken, async (req, res) => {
         cached: false,
       });
     } catch (gmailError) {
-      logger.error('Error fetching from Gmail:', gmailError);
+      logger.error(`Error fetching from Gmail for EmailID=${id}, GmailID=${email.gmail_id}:`, gmailError);
+      logger.error(`Gmail error code: ${gmailError.code}, message: ${gmailError.message}`);
 
       // Handle specific Gmail errors
       if (gmailError.code === 404) {
@@ -259,7 +276,8 @@ router.get('/:id/content', authenticateToken, async (req, res) => {
       });
     }
   } catch (error) {
-    logger.error('Error in email content endpoint:', error);
+    logger.error(`Error in email content endpoint for ID=${req.params.id}:`, error);
+    logger.error(`Error stack: ${error.stack}`);
     res.status(500).json({ error: 'Failed to retrieve email content' });
   }
 });
