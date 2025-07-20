@@ -6,13 +6,14 @@ const initializeWorkers = () => {
   
   try {
     // Start unsubscribe worker
-    require('./unsubscribeWorker');
-    logger.info('Unsubscribe worker initialized');
+    // TEMPORARILY DISABLED DUE TO REDIS CONNECTION ISSUES
+    // require('./unsubscribeWorker');
+    // logger.info('Unsubscribe worker initialized');
     
     // Add other workers here as needed
     // require('./emailProcessingWorker');
     
-    logger.info('All queue workers initialized successfully');
+    logger.info('Workers disabled - skipping initialization');
   } catch (error) {
     logger.error('Failed to initialize workers:', error);
     throw error;
