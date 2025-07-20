@@ -290,11 +290,14 @@ setInterval(
 (async () => {
   try {
     logger.info('Testing Redis connection for unsubscribe queue...');
-    const health = await unsubscribeQueue.isReady();
-    logger.info('Unsubscribe queue Redis connection test:', { isReady: health });
-
+    
+    // BullMQ doesn't have isReady(), use getJobCounts() to test connection
     const counts = await unsubscribeQueue.getJobCounts();
     logger.info('Unsubscribe queue job counts:', counts);
+    
+    // Also test if we can get waiting jobs
+    const waitingJobs = await unsubscribeQueue.getWaitingCount();
+    logger.info('Unsubscribe queue waiting jobs:', waitingJobs);
   } catch (error) {
     logger.error('Failed to connect to Redis for unsubscribe queue:', {
       message: error.message,
