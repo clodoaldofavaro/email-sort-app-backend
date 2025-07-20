@@ -1,4 +1,4 @@
-const { Queue } = require('bullmq');
+// const { Queue } = require('bullmq');
 const Redis = require('ioredis');
 const logger = require('../utils/logger');
 
@@ -19,7 +19,7 @@ try {
   const redisHost = process.env.REDIS_QUEUE_HOST || process.env.REDIS_HOST || 'localhost';
   const redisPort = process.env.REDIS_QUEUE_PORT || process.env.REDIS_PORT || '6379';
   const redisPassword = process.env.REDIS_QUEUE_PASSWORD || process.env.REDIS_PASSWORD;
-  
+
   // Construct URL with auth if password exists
   let redisUrl;
   if (redisPassword) {
@@ -27,7 +27,7 @@ try {
   } else {
     redisUrl = `redis://${redisHost}:${redisPort}`;
   }
-  
+
   // Override with explicit URL if provided
   if (process.env.REDIS_QUEUE_URL) {
     redisUrl = process.env.REDIS_QUEUE_URL;
@@ -45,7 +45,7 @@ try {
   redisConnection = new Redis(redisUrl, {
     maxRetriesPerRequest: null,
     enableReadyCheck: false,
-    retryStrategy: (times) => {
+    retryStrategy: times => {
       if (times > 10) {
         logger.error('Too many Redis queue reconnection attempts');
         return null;
@@ -73,7 +73,7 @@ try {
     logger.warn('Redis Queue connection closed');
     isConnected = false;
   });
-  
+
   redisConnection.on('reconnecting', () => {
     logger.info('Reconnecting to Redis Queue...');
   });
@@ -82,6 +82,8 @@ try {
   throw error;
 }
 
+// COMMENTING OUT QUEUE CREATION - TESTING REDIS CONNECTION ONLY
+/*
 logger.info('Creating BullMQ queues with explicit Redis connection...');
 
 const unsubscribeQueue = new Queue('unsubscribe', {
@@ -91,6 +93,7 @@ const unsubscribeQueue = new Queue('unsubscribe', {
 logger.info('BullMQ queues created successfully', {
   queues: ['email-processing', 'unsubscribe'],
 });
+*/
 
 // Test the actual Redis connection
 setTimeout(async () => {
@@ -99,25 +102,27 @@ setTimeout(async () => {
       // Test with direct Redis commands using ioredis
       const testKey = 'queue-redis-test-key';
       const testValue = 'Queue Redis Connected at ' + new Date().toISOString();
-      
+
       logger.info('Testing Queue Redis connection with set/get...');
       await redisConnection.setex(testKey, 60, testValue); // 60 second TTL
-      
+
       const retrievedValue = await redisConnection.get(testKey);
       if (retrievedValue === testValue) {
-        logger.info('Queue Redis test successful!', { 
-          key: testKey, 
-          value: retrievedValue 
+        logger.info('Queue Redis test successful!', {
+          key: testKey,
+          value: retrievedValue,
         });
-        
-        // Also test queue operations
+
+        // Queue operations test disabled - testing Redis only
+        /*
         logger.info('Testing BullMQ queue operations...');
         const jobCounts = await unsubscribeQueue.getJobCounts();
         logger.info('Queue job counts retrieved successfully', { counts: jobCounts });
+        */
       } else {
         logger.error('Queue Redis test failed - value mismatch', {
           expected: testValue,
-          received: retrievedValue
+          received: retrievedValue,
         });
       }
     } catch (error) {
@@ -135,6 +140,8 @@ setTimeout(async () => {
   }
 }, 2000); // Wait 2 seconds for connection to establish
 
+// QUEUE EVENT HANDLERS DISABLED
+/*
 unsubscribeQueue.on('error', error => {
   logger.error('Unsubscribe queue error:', error);
 });
@@ -158,10 +165,12 @@ unsubscribeQueue.on('reconnecting', () => {
 unsubscribeQueue.on('stalled', job => {
   logger.warn('Unsubscribe job stalled', { jobId: job?.id });
 });
+*/
 
 // Log successful module export
-logger.info('Bull queues module initialized and exported');
+logger.info('Redis connection test module initialized');
 
+// Export empty object - no queues
 module.exports = {
-  unsubscribeQueue,
+  // unsubscribeQueue,
 };
