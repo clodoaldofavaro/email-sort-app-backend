@@ -69,7 +69,27 @@ try {
   unsubscribeWorker = new Worker(
     'unsubscribe',
     async job => {
-      const { batchJobId, userId, emailId, unsubscribeLink, subject, sender } = job.data;
+      const { batchJobId, userId, emailId, unsubscribeLink, subject, sender, isTest } = job.data;
+
+      // Handle test jobs
+      if (isTest) {
+        logger.info('🎉 Processing TEST job', {
+          jobId: job.id,
+          jobName: job.name,
+          data: job.data,
+        });
+        
+        // Simulate processing
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
+        logger.info('✅ Test job completed successfully!');
+        return {
+          success: true,
+          isTest: true,
+          message: 'Test job processed in production',
+          processedAt: new Date().toISOString(),
+        };
+      }
 
       logger.info(`Processing unsubscribe job for email ${emailId} in batch ${batchJobId}`);
 

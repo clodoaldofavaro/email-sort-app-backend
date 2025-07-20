@@ -11,6 +11,7 @@ const categoryRoutes = require('./routes/categories');
 const emailRoutes = require('./routes/emails');
 const accountRoutes = require('./routes/accounts');
 const unsubscribeRoutes = require('./routes/unsubscribe');
+const testQueueRoutes = require('./routes/test-queue');
 const { scheduleEmailProcessing } = require('./jobs/emailProcessor');
 const { initializeWorkers } = require('./workers');
 
@@ -59,6 +60,7 @@ app.use('/api/categories', categoryRoutes);
 app.use('/api/emails', emailRoutes);
 app.use('/api/accounts', accountRoutes);
 app.use('/api', unsubscribeRoutes);
+app.use('/api', testQueueRoutes);
 
 // Health check
 app.get('/health', async (req, res) => {
