@@ -12,6 +12,7 @@ const emailRoutes = require('./routes/emails');
 const accountRoutes = require('./routes/accounts');
 const unsubscribeRoutes = require('./routes/unsubscribe');
 const { scheduleEmailProcessing } = require('./jobs/emailProcessor');
+const { initializeWorkers } = require('./workers');
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -132,6 +133,15 @@ process.on('SIGTERM', () => {
   logger.info('SIGTERM received, shutting down gracefully');
   process.exit(0);
 });
+
+// Initialize queue workers
+try {
+  initializeWorkers();
+  logger.info('Queue workers initialized successfully');
+} catch (error) {
+  logger.error('Failed to initialize queue workers:', error);
+  // Continue running without workers - API will still function
+}
 
 app.listen(PORT, '0.0.0.0', () => {
   logger.info(`Server running on port ${PORT}`);

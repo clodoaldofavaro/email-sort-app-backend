@@ -4,129 +4,8 @@ const db = require('../config/database');
 const { authenticateToken } = require('../middleware/auth');
 const unsubscribeService = require('../services/unsubscribe');
 const logger = require('../utils/logger');
-
-// POST /api/unsubscribe
-router.post('/unsubscribe', authenticateToken, async (req, res) => {
-  try {
-    const { emailId, unsubscribeLink } = req.body;
-
-    // Validate input
-    if (!emailId || !unsubscribeLink) {
-      return res.status(400).json({ 
-        error: 'emailId and unsubscribeLink are required' 
-      });
-    }
-
-    // Validate URL format
-    try {
-      new URL(unsubscribeLink);
-    } catch (urlError) {
-      return res.status(400).json({ 
-        error: 'Invalid unsubscribe link format' 
-      });
-    }
-
-    logger.info(`Processing unsubscribe for email ${emailId} by user ${req.user.id}`);
-
-    // Verify the email belongs to the user and has an unsubscribe link
-    const emailCheck = await req.db.query(
-      'SELECT id, subject, sender, unsubscribe_link FROM emails WHERE id = $1 AND user_id = $2 AND unsubscribe_link IS NOT NULL',
-      [emailId, req.user.id]
-    );
-
-    if (emailCheck.rows.length === 0) {
-      return res.status(404).json({ 
-        error: 'Email not found or does not belong to user' 
-      });
-    }
-
-    const email = emailCheck.rows[0];
-
-    // Verify the provided unsubscribe link matches what we have in DB
-    if (email.unsubscribe_link !== unsubscribeLink) {
-      return res.status(400).json({ 
-        error: 'Unsubscribe link does not match email record' 
-      });
-    }
-
-    // Update email status to indicate unsubscribe is in progress
-    await req.db.query(
-      'UPDATE emails SET unsubscribe_status = $1, unsubscribe_attempted_at = NOW() WHERE id = $2',
-      ['in_progress', emailId]
-    );
-
-    // Attempt to unsubscribe using Stagehand
-    logger.info(`Starting unsubscribe process for email ${emailId}`);
-    const unsubscribeResult = await unsubscribeService.unsubscribeFromEmail(unsubscribeLink);
-    logger.info('Unsubscribe service response:', { emailId, result: unsubscribeResult });
-
-    // Update the email record with the result
-    const finalStatus = unsubscribeResult.success ? 'completed' : 'failed';
-    await req.db.query(
-      `UPDATE emails 
-       SET unsubscribe_status = $1, 
-           unsubscribe_completed_at = $2,
-           unsubscribe_result = $3
-       WHERE id = $4`,
-      [
-        finalStatus,
-        unsubscribeResult.success ? new Date() : null,
-        JSON.stringify({
-          message: unsubscribeResult.message,
-          details: unsubscribeResult.details,
-          timestamp: new Date().toISOString()
-        }),
-        emailId
-      ]
-    );
-
-    // Log the final result
-    logger.info(`Unsubscribe ${unsubscribeResult.success ? 'succeeded' : 'failed'} for email ${emailId}`, {
-      emailId,
-      success: unsubscribeResult.success,
-      message: unsubscribeResult.message,
-      details: unsubscribeResult.details
-    });
-
-    const response = {
-      success: unsubscribeResult.success,
-      message: unsubscribeResult.message,
-      details: unsubscribeResult.details,
-      emailId: emailId
-    };
-    logger.info('Sending unsubscribe response:', response);
-    res.json(response);
-
-  } catch (error) {
-    logger.error('Unsubscribe endpoint error:', { error: error.message, stack: error.stack });
-
-    // Update email status to failed if we have emailId
-    if (req.body.emailId) {
-      try {
-        await db.query(
-          `UPDATE emails 
-           SET unsubscribe_status = 'failed',
-               unsubscribe_result = $1
-           WHERE id = $2`,
-          [
-            JSON.stringify({
-              error: error.message,
-              timestamp: new Date().toISOString()
-            }),
-            req.body.emailId
-          ]
-        );
-      } catch (updateError) {
-        logger.error('Failed to update email status:', { error: updateError.message });
-      }
-    }
-
-    res.status(500).json({ 
-      error: 'Internal server error during unsubscribe process',
-      message: error.message 
-    });
-  }
-});
+const { unsubscribeQueue } = require('../config/queues');
+const { v4: uuidv4 } = require('uuid');
 
 // POST /api/unsubscribe/batch - Handle multiple emails at once
 router.post('/unsubscribe/batch', authenticateToken, async (req, res) => {
@@ -245,6 +124,139 @@ router.post('/unsubscribe/batch', authenticateToken, async (req, res) => {
     logger.error('Batch unsubscribe endpoint error:', { error: error.message, stack: error.stack });
     res.status(500).json({ 
       error: 'Internal server error during batch unsubscribe',
+      message: error.message 
+    });
+  }
+});
+
+// POST /api/unsubscribe/async/batch - Handle multiple emails asynchronously via queue
+router.post('/unsubscribe/async/batch', authenticateToken, async (req, res) => {
+  try {
+    const { emailIds } = req.body;
+
+    if (!Array.isArray(emailIds) || emailIds.length === 0) {
+      return res.status(400).json({ 
+        error: 'emailIds array is required and cannot be empty' 
+      });
+    }
+
+    // No limit on batch size for async processing
+    logger.info(`Received async batch unsubscribe request for ${emailIds.length} emails`);
+
+    // Verify all emails belong to user and have unsubscribe links
+    const placeholders = emailIds.map((_, index) => `$${index + 2}`).join(',');
+    const result = await db.query(
+      `SELECT id, subject, sender, unsubscribe_link 
+       FROM emails 
+       WHERE id IN (${placeholders}) AND user_id = $1 AND unsubscribe_link IS NOT NULL`,
+      [req.user.id, ...emailIds]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ 
+        error: 'No valid emails found with unsubscribe links' 
+      });
+    }
+
+    // Create a batch job ID
+    const batchJobId = uuidv4();
+    const timestamp = new Date();
+
+    // Store batch job metadata in database
+    await db.query(
+      `INSERT INTO unsubscribe_jobs 
+       (id, user_id, total_emails, processed_count, success_count, failed_count, status, created_at, updated_at)
+       VALUES ($1, $2, $3, 0, 0, 0, 'pending', $4, $4)`,
+      [batchJobId, req.user.id, result.rows.length, timestamp]
+    );
+
+    // Add jobs to the queue for each email
+    const jobPromises = result.rows.map(email => 
+      unsubscribeQueue.add('unsubscribe-email', {
+        batchJobId,
+        userId: req.user.id,
+        emailId: email.id,
+        unsubscribeLink: email.unsubscribe_link,
+        subject: email.subject,
+        sender: email.sender
+      }, {
+        attempts: 3,
+        backoff: {
+          type: 'exponential',
+          delay: 2000
+        },
+        removeOnComplete: true,
+        removeOnFail: false
+      })
+    );
+
+    await Promise.all(jobPromises);
+
+    logger.info(`Created ${result.rows.length} unsubscribe jobs for batch ${batchJobId}`);
+
+    res.json({
+      success: true,
+      message: `Batch unsubscribe job created for ${result.rows.length} emails`,
+      batchJobId,
+      totalEmails: result.rows.length,
+      status: 'pending',
+      createdAt: timestamp
+    });
+
+  } catch (error) {
+    logger.error('Async batch unsubscribe endpoint error:', { error: error.message, stack: error.stack });
+    res.status(500).json({ 
+      error: 'Internal server error creating async batch unsubscribe job',
+      message: error.message 
+    });
+  }
+});
+
+// GET /api/unsubscribe/async/status/:jobId - Check status of async batch job
+router.get('/unsubscribe/async/status/:jobId', authenticateToken, async (req, res) => {
+  try {
+    const { jobId } = req.params;
+
+    // Validate UUID format
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(jobId)) {
+      return res.status(400).json({ error: 'Invalid job ID format' });
+    }
+
+    // Get job status from database
+    const result = await db.query(
+      `SELECT * FROM unsubscribe_jobs WHERE id = $1 AND user_id = $2`,
+      [jobId, req.user.id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Job not found' });
+    }
+
+    const job = result.rows[0];
+
+    // Calculate progress percentage
+    const progressPercentage = job.total_emails > 0 
+      ? Math.round((job.processed_count / job.total_emails) * 100) 
+      : 0;
+
+    res.json({
+      jobId: job.id,
+      status: job.status,
+      totalEmails: job.total_emails,
+      processedCount: job.processed_count,
+      successCount: job.success_count,
+      failedCount: job.failed_count,
+      progressPercentage,
+      createdAt: job.created_at,
+      updatedAt: job.updated_at,
+      completedAt: job.completed_at
+    });
+
+  } catch (error) {
+    logger.error('Job status endpoint error:', { error: error.message, stack: error.stack });
+    res.status(500).json({ 
+      error: 'Internal server error checking job status',
       message: error.message 
     });
   }
