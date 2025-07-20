@@ -10,7 +10,7 @@ const router = express.Router();
 router.get('/category/:categoryId', authenticateToken, async (req, res) => {
   try {
     const { categoryId } = req.params;
-    const { page = 1, limit = 20, accountId } = req.query;
+    const { page = 1, limit = 20, accountId, hasUnsubscribe } = req.query;
     const offset = (page - 1) * limit;
 
     // Verify category belongs to user
@@ -23,23 +23,30 @@ router.get('/category/:categoryId', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'Category not found' });
     }
 
-    // Build query with optional account filter
+    // Build query with optional filters
     let whereClause = 'WHERE e.category_id = $1 AND e.user_id = $2';
     const queryParams = [categoryId, req.user.id];
-    
+
     if (accountId) {
       // Verify account belongs to user
       const accountResult = await db.query(
         'SELECT id FROM email_accounts WHERE id = $1 AND user_id = $2',
         [accountId, req.user.id]
       );
-      
+
       if (accountResult.rows.length === 0) {
         return res.status(404).json({ error: 'Account not found' });
       }
-      
-      whereClause += ' AND e.account_id = $3';
+
+      whereClause += ` AND e.account_id = $${queryParams.length + 1}`;
       queryParams.push(accountId);
+    }
+
+    // Add unsubscribe filter
+    if (hasUnsubscribe === 'true') {
+      whereClause += ' AND e.unsubscribe_link IS NOT NULL';
+    } else if (hasUnsubscribe === 'false') {
+      whereClause += ' AND e.unsubscribe_link IS NULL';
     }
 
     const result = await db.query(
@@ -53,10 +60,7 @@ router.get('/category/:categoryId', authenticateToken, async (req, res) => {
       [...queryParams, limit, offset]
     );
 
-    const countResult = await db.query(
-      `SELECT COUNT(*) FROM emails e ${whereClause}`,
-      queryParams
-    );
+    const countResult = await db.query(`SELECT COUNT(*) FROM emails e ${whereClause}`, queryParams);
 
     res.json({
       emails: result.rows,
@@ -122,7 +126,6 @@ router.delete('/bulk', authenticateToken, async (req, res) => {
   }
 });
 
-
 // Move email to different category
 router.put('/:id/category', authenticateToken, async (req, res) => {
   try {
@@ -159,10 +162,9 @@ router.put('/:id/category', authenticateToken, async (req, res) => {
 router.post('/process', authenticateToken, async (req, res) => {
   try {
     // Get all user's email accounts
-    const accountsResult = await db.query(
-      'SELECT email FROM email_accounts WHERE user_id = $1',
-      [req.user.id]
-    );
+    const accountsResult = await db.query('SELECT email FROM email_accounts WHERE user_id = $1', [
+      req.user.id,
+    ]);
 
     if (accountsResult.rows.length === 0) {
       return res.status(404).json({ error: 'No email accounts found' });
@@ -176,21 +178,21 @@ router.post('/process', authenticateToken, async (req, res) => {
         results.push({
           account: account.email,
           status: 'success',
-          processed: processed
+          processed: processed,
         });
       } catch (error) {
         console.error(`Error processing emails for ${account.email}:`, error);
         results.push({
           account: account.email,
           status: 'error',
-          error: error.message
+          error: error.message,
         });
       }
     }
 
     res.json({
       message: 'Email processing completed',
-      accounts: results
+      accounts: results,
     });
   } catch (error) {
     console.error('Error processing emails:', error);
@@ -235,13 +237,13 @@ router.get('/stats/overview', authenticateToken, async (req, res) => {
         categories_used: parseInt(overallResult.rows[0].categories_used),
         unique_senders: parseInt(overallResult.rows[0].unique_senders),
         unsubscribed_count: parseInt(overallResult.rows[0].unsubscribed_count),
-        with_unsubscribe_link: parseInt(overallResult.rows[0].with_unsubscribe_link)
+        with_unsubscribe_link: parseInt(overallResult.rows[0].with_unsubscribe_link),
       },
       byCategory: categoryResult.rows.map(row => ({
         category_name: row.category_name,
         category_id: row.category_id,
-        count: parseInt(row.category_count)
-      }))
+        count: parseInt(row.category_count),
+      })),
     });
   } catch (error) {
     console.error('Error fetching email stats:', error);
