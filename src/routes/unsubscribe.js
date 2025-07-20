@@ -27,7 +27,7 @@ router.post('/unsubscribe/batch', authenticateToken, async (req, res) => {
 
     // Get emails with unsubscribe links
     const placeholders = emailIds.map((_, index) => `$${index + 2}`).join(',');
-    const result = await req.db.query(
+    const result = await db.query(
       `SELECT id, subject, sender, unsubscribe_link 
        FROM emails 
        WHERE id IN (${placeholders}) AND user_id = $1 AND unsubscribe_link IS NOT NULL`,
