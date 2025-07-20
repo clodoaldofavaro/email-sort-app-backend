@@ -24,8 +24,10 @@ const redisQueueConfig = {
 if (process.env.REDIS_QUEUE_URL || process.env.REDIS_URL) {
   redisQueueConfig.redis = process.env.REDIS_QUEUE_URL || process.env.REDIS_URL;
   const urlToLog = redisQueueConfig.redis || '';
-  logger.info('Using Redis URL for Bull queues', { 
-    url: urlToLog.replace(/:([^:@]+)@/, ':****@'),
+  // Log Redis configuration (similar to what redisQueue.js had)
+  const sanitizedUrl = urlToLog.replace(/:([^:@]+)@/, ':****@');
+  logger.info('Initializing Redis Queue for Bull', { 
+    url: sanitizedUrl,
     fullUrl: urlToLog // Show full URL for debugging
   });
 } else {
@@ -50,7 +52,19 @@ emailProcessingQueue.on('error', error => {
 });
 
 emailProcessingQueue.on('ready', () => {
-  logger.info('Email processing queue is ready');
+  logger.info('Email processing queue is ready and connected to Redis');
+});
+
+emailProcessingQueue.on('connect', () => {
+  logger.info('Email processing queue connected to Redis successfully');
+});
+
+emailProcessingQueue.on('disconnect', () => {
+  logger.warn('Email processing queue disconnected from Redis');
+});
+
+emailProcessingQueue.on('reconnecting', () => {
+  logger.info('Email processing queue reconnecting to Redis...');
 });
 
 emailProcessingQueue.on('stalled', job => {
@@ -62,7 +76,19 @@ unsubscribeQueue.on('error', error => {
 });
 
 unsubscribeQueue.on('ready', () => {
-  logger.info('Unsubscribe queue is ready');
+  logger.info('Unsubscribe queue is ready and connected to Redis');
+});
+
+unsubscribeQueue.on('connect', () => {
+  logger.info('Unsubscribe queue connected to Redis successfully');
+});
+
+unsubscribeQueue.on('disconnect', () => {
+  logger.warn('Unsubscribe queue disconnected from Redis');
+});
+
+unsubscribeQueue.on('reconnecting', () => {
+  logger.info('Unsubscribe queue reconnecting to Redis...');
 });
 
 unsubscribeQueue.on('stalled', job => {
