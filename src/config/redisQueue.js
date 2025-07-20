@@ -11,6 +11,10 @@ try {
   const redisPort = process.env.REDIS_QUEUE_PORT || process.env.REDIS_PORT || '6379';
   const redisUrl = process.env.REDIS_QUEUE_URL || process.env.REDIS_URL || `redis://${redisHost}:${redisPort}`;
   
+  // Log Redis configuration (without sensitive data)
+  const sanitizedUrl = redisUrl.replace(/:([^:@]+)@/, ':****@');
+  logger.info('Initializing Redis Queue client', { url: sanitizedUrl });
+  
   client = redis.createClient({
     url: redisUrl,
     socket: {
@@ -31,8 +35,16 @@ try {
   });
 
   client.on('connect', () => {
-    logger.info('Connected to Redis Queue');
+    logger.info('Connected to Redis Queue successfully');
     isConnected = true;
+  });
+
+  client.on('ready', () => {
+    logger.info('Redis Queue client is ready to accept commands');
+  });
+
+  client.on('reconnecting', () => {
+    logger.info('Reconnecting to Redis Queue...');
   });
 
   client.on('disconnect', () => {
@@ -49,8 +61,16 @@ try {
       isConnected = false;
     }
   })();
+  logger.info('Redis Queue client created, attempting to connect...');
 } catch (error) {
   logger.error('Failed to create Redis Queue client:', error);
+}
+
+// Log export status
+if (client) {
+  logger.info('Redis Queue client exported for Bull queue usage');
+} else {
+  logger.error('Redis Queue client is null, Bull queues may not function properly');
 }
 
 // Export the client directly for Bull to use

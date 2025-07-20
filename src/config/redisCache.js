@@ -11,6 +11,10 @@ try {
   const redisPort = process.env.REDIS_CACHE_PORT || process.env.REDIS_PORT || '6379';
   const redisUrl = process.env.REDIS_CACHE_URL || process.env.REDIS_URL || `redis://${redisHost}:${redisPort}`;
   
+  // Log Redis configuration (without sensitive data)
+  const sanitizedUrl = redisUrl.replace(/:([^:@]+)@/, ':****@');
+  logger.info('Initializing Redis Cache client', { url: sanitizedUrl });
+  
   client = redis.createClient({
     url: redisUrl,
     socket: {
@@ -31,8 +35,16 @@ try {
   });
 
   client.on('connect', () => {
-    logger.info('Connected to Redis Cache');
+    logger.info('Connected to Redis Cache successfully');
     isConnected = true;
+  });
+
+  client.on('ready', () => {
+    logger.info('Redis Cache client is ready to accept commands');
+  });
+
+  client.on('reconnecting', () => {
+    logger.info('Reconnecting to Redis Cache...');
   });
 
   client.on('disconnect', () => {
@@ -45,19 +57,20 @@ try {
     try {
       await client.connect();
     } catch (error) {
-      logger.error('Failed to connect to Redis:', error);
+      logger.error('Failed to connect to Redis Cache:', error);
       isConnected = false;
     }
   })();
+  logger.info('Redis Cache client created, attempting to connect...');
 } catch (error) {
-  logger.error('Failed to create Redis client:', error);
+  logger.error('Failed to create Redis Cache client:', error);
 }
 
 // Wrapper functions with error handling
 const redisWrapper = {
   async get(key) {
     if (!client || !isConnected) {
-      logger.warn('Redis not available, skipping cache get');
+      logger.warn('Redis Cache not available, skipping cache get');
       return null;
     }
     
@@ -71,7 +84,7 @@ const redisWrapper = {
 
   async setEx(key, ttl, value) {
     if (!client || !isConnected) {
-      logger.warn('Redis not available, skipping cache set');
+      logger.warn('Redis Cache not available, skipping cache set');
       return false;
     }
     
@@ -86,7 +99,7 @@ const redisWrapper = {
 
   async del(key) {
     if (!client || !isConnected) {
-      logger.warn('Redis not available, skipping cache delete');
+      logger.warn('Redis Cache not available, skipping cache delete');
       return false;
     }
     
