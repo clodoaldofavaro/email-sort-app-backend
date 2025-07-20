@@ -52,7 +52,8 @@ router.get('/category/:categoryId', authenticateToken, async (req, res) => {
     }
 
     const result = await db.query(
-      `SELECT e.*, c.name as category_name, ea.email as account_email
+      `SELECT e.*, c.name as category_name, ea.email as account_email,
+       e.unsubscribe_status, e.unsubscribe_completed_at
        FROM emails e
        JOIN categories c ON e.category_id = c.id
        LEFT JOIN email_accounts ea ON e.account_id = ea.id
