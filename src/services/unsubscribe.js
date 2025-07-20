@@ -22,7 +22,7 @@ class UnsubscribeService {
       },
       // Add timeout and other options
       browserOptions: {
-        timeout: 30000,
+        timeout: 60000, // Increase to 60 seconds
       },
     });
 
@@ -42,7 +42,7 @@ class UnsubscribeService {
       // Navigate to the unsubscribe page
       await page.goto(unsubscribeLink, {
         waitUntil: 'networkidle',
-        timeout: 30000,
+        timeout: 60000, // Increase to 60 seconds
       });
 
       // Wait a moment for the page to fully load
