@@ -3,52 +3,82 @@ const logger = require('../utils/logger');
 
 // Log all Redis-related environment variables for debugging
 logger.info('Redis Queue Environment Variables:', {
-  REDIS_QUEUE_URL: process.env.REDIS_QUEUE_URL ? 'Set (hidden)' : 'Not set',
   REDIS_QUEUE_HOST: process.env.REDIS_QUEUE_HOST || 'Not set',
-  REDIS_QUEUE_PORT: process.env.REDIS_QUEUE_PORT || 'Not set'
+  REDIS_QUEUE_PORT: process.env.REDIS_QUEUE_PORT || 'Not set',
+  REDIS_QUEUE_PASSWORD: process.env.REDIS_QUEUE_PASSWORD ? 'Set (hidden)' : 'Not set',
+  REDIS_QUEUE_URL: process.env.REDIS_QUEUE_URL ? 'Set (hidden)' : 'Not set'
 });
 
-// Get Redis URL for queues
-const redisUrl = process.env.REDIS_QUEUE_URL || process.env.REDIS_URL;
+// Build Redis configuration from individual components or URL
+let redisConfig;
 
-if (!redisUrl) {
-  logger.error('No Redis URL configured for queues!');
-  throw new Error('REDIS_QUEUE_URL or REDIS_URL must be set');
+if (process.env.REDIS_QUEUE_HOST && process.env.REDIS_QUEUE_PASSWORD) {
+  // Use individual components (preferred for Upstash)
+  logger.info('Using individual Redis components for Bull queues', {
+    host: process.env.REDIS_QUEUE_HOST,
+    port: process.env.REDIS_QUEUE_PORT || 6379
+  });
+  
+  redisConfig = {
+    redis: {
+      host: process.env.REDIS_QUEUE_HOST,
+      port: parseInt(process.env.REDIS_QUEUE_PORT) || 6379,
+      password: process.env.REDIS_QUEUE_PASSWORD,
+      // Upstash specific settings
+      tls: {
+        rejectUnauthorized: false
+      },
+      maxRetriesPerRequest: 3,
+      enableReadyCheck: true,
+      retryStrategy: (times) => {
+        if (times > 3) {
+          logger.error('Redis connection failed after 3 retries');
+          return null;
+        }
+        const delay = Math.min(times * 1000, 3000);
+        logger.info(`Retrying Redis connection, attempt ${times}, delay ${delay}ms`);
+        return delay;
+      }
+    }
+  };
+} else if (process.env.REDIS_QUEUE_URL) {
+  // Fall back to URL parsing
+  const redisUrl = process.env.REDIS_QUEUE_URL;
+  logger.info('Using Redis URL for Bull queues', {
+    url: redisUrl.replace(/:([^:@]+)@/, ':****@')
+  });
+  
+  const url = new URL(redisUrl);
+  redisConfig = {
+    redis: {
+      host: url.hostname,
+      port: parseInt(url.port) || 6379,
+      password: url.password,
+      // Upstash specific settings
+      tls: {
+        rejectUnauthorized: false
+      },
+      maxRetriesPerRequest: 3,
+      enableReadyCheck: true,
+      retryStrategy: (times) => {
+        if (times > 3) {
+          logger.error('Redis connection failed after 3 retries');
+          return null;
+        }
+        const delay = Math.min(times * 1000, 3000);
+        logger.info(`Retrying Redis connection, attempt ${times}, delay ${delay}ms`);
+        return delay;
+      }
+    }
+  };
+} else {
+  logger.error('No Redis configuration for queues!');
+  throw new Error('Either REDIS_QUEUE_HOST + REDIS_QUEUE_PASSWORD or REDIS_QUEUE_URL must be set');
 }
 
-logger.info('Initializing Bull queues with Redis URL', {
-  url: redisUrl.replace(/:([^:@]+)@/, ':****@'),
-  fullUrl: redisUrl // Show full URL for debugging
-});
-
-// Parse the Redis URL to create Upstash-compatible configuration
-const url = new URL(redisUrl);
-const redisConfig = {
-  redis: {
-    host: url.hostname,
-    port: parseInt(url.port) || 6379,
-    password: url.password,
-    // Upstash specific settings
-    tls: {
-      rejectUnauthorized: false
-    },
-    maxRetriesPerRequest: 3,
-    enableReadyCheck: true,
-    retryStrategy: (times) => {
-      if (times > 3) {
-        logger.error('Redis connection failed after 3 retries');
-        return null;
-      }
-      const delay = Math.min(times * 1000, 3000);
-      logger.info(`Retrying Redis connection, attempt ${times}, delay ${delay}ms`);
-      return delay;
-    }
-  }
-};
-
 logger.info('Creating Bull queues with Upstash configuration...', {
-  host: url.hostname,
-  port: url.port || 6379,
+  host: redisConfig.redis.host,
+  port: redisConfig.redis.port,
   hasTLS: true
 });
 
