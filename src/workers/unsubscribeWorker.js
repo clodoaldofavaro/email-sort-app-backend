@@ -7,27 +7,50 @@ const logger = require('../utils/logger');
 
 logger.info('Starting unsubscribe worker initialization...');
 
-// Create Redis connection for worker following Upstash docs
-const redisUrl = process.env.REDIS_QUEUE_URL || process.env.REDIS_URL;
-if (!redisUrl) {
-  throw new Error('REDIS_QUEUE_URL is required for worker');
-}
-
-logger.info('Creating Redis connection for worker', {
-  url: redisUrl.replace(/:([^:@]+)@/, ':****@'),
-  fullUrl: redisUrl,
-});
-
+// Create Redis connection for worker following same pattern as redisCache.js
 let connection;
 
 try {
+  // Build Redis URL from components if not explicitly provided
+  const redisHost = process.env.REDIS_QUEUE_HOST || process.env.REDIS_HOST || 'localhost';
+  const redisPort = process.env.REDIS_QUEUE_PORT || process.env.REDIS_PORT || '6379';
+  const redisPassword = process.env.REDIS_QUEUE_PASSWORD || process.env.REDIS_PASSWORD;
+  
+  // Construct URL with auth if password exists
+  let redisUrl;
+  if (redisPassword) {
+    redisUrl = `redis://default:${redisPassword}@${redisHost}:${redisPort}`;
+  } else {
+    redisUrl = `redis://${redisHost}:${redisPort}`;
+  }
+  
+  // Override with explicit URL if provided
+  if (process.env.REDIS_QUEUE_URL) {
+    redisUrl = process.env.REDIS_QUEUE_URL;
+  } else if (process.env.REDIS_URL) {
+    redisUrl = process.env.REDIS_URL;
+  }
+
+  logger.info('Creating Redis connection for worker', {
+    url: redisUrl.replace(/:([^:@]+)@/, ':****@'),
+    host: redisHost,
+    port: redisPort,
+  });
+
   connection = new Redis(redisUrl, {
     maxRetriesPerRequest: null,
     enableReadyCheck: false,
-    tls: {},
+    retryStrategy: (times) => {
+      if (times > 10) {
+        logger.error('Too many Redis worker reconnection attempts');
+        return null;
+      }
+      return Math.min(times * 100, 3000);
+    },
   });
 } catch (error) {
-  logger.error('Error connecting worker to Redis', { url: redisUrl, connection });
+  logger.error('Error connecting worker to Redis', error);
+  throw error;
 }
 
 // Connection event handlers for debugging

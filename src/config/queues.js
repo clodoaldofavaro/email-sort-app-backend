@@ -10,32 +10,54 @@ logger.info('Redis Queue Environment Variables:', {
   REDIS_QUEUE_URL: process.env.REDIS_QUEUE_URL ? 'Set (hidden)' : 'Not set',
 });
 
-// Create Redis connection following Upstash BullMQ guide
+// Create Redis connection following same pattern as redisCache.js
 let redisConnection;
+let isConnected = false;
 
 try {
-  // Upstash recommends using the URL directly with specific options
-  const redisUrl = process.env.REDIS_QUEUE_URL || process.env.REDIS_URL;
-
-  if (!redisUrl) {
-    throw new Error('REDIS_QUEUE_URL must be set');
+  // Build Redis URL from components if not explicitly provided
+  const redisHost = process.env.REDIS_QUEUE_HOST || process.env.REDIS_HOST || 'localhost';
+  const redisPort = process.env.REDIS_QUEUE_PORT || process.env.REDIS_PORT || '6379';
+  const redisPassword = process.env.REDIS_QUEUE_PASSWORD || process.env.REDIS_PASSWORD;
+  
+  // Construct URL with auth if password exists
+  let redisUrl;
+  if (redisPassword) {
+    redisUrl = `redis://default:${redisPassword}@${redisHost}:${redisPort}`;
+  } else {
+    redisUrl = `redis://${redisHost}:${redisPort}`;
+  }
+  
+  // Override with explicit URL if provided
+  if (process.env.REDIS_QUEUE_URL) {
+    redisUrl = process.env.REDIS_QUEUE_URL;
+  } else if (process.env.REDIS_URL) {
+    redisUrl = process.env.REDIS_URL;
   }
 
-  logger.info('Creating Redis connection for BullMQ (Upstash)', {
+  logger.info('Creating Redis connection for BullMQ', {
     url: redisUrl.replace(/:([^:@]+)@/, ':****@'),
-    fullUrl: redisUrl,
+    host: redisHost,
+    port: redisPort,
   });
 
-  // Following Upstash BullMQ documentation exactly
+  // Create connection with BullMQ recommended settings
   redisConnection = new Redis(redisUrl, {
     maxRetriesPerRequest: null,
     enableReadyCheck: false,
-    tls: {},
+    retryStrategy: (times) => {
+      if (times > 10) {
+        logger.error('Too many Redis queue reconnection attempts');
+        return null;
+      }
+      return Math.min(times * 100, 3000);
+    },
   });
 
   // Test the connection
   redisConnection.on('connect', () => {
     logger.info('Redis Queue connection established');
+    isConnected = true;
   });
 
   redisConnection.on('ready', () => {
@@ -43,11 +65,17 @@ try {
   });
 
   redisConnection.on('error', err => {
-    logger.error('Redis Queue connection error');
+    logger.error('Redis Queue connection error:', err);
+    isConnected = false;
   });
 
   redisConnection.on('close', () => {
     logger.warn('Redis Queue connection closed');
+    isConnected = false;
+  });
+  
+  redisConnection.on('reconnecting', () => {
+    logger.info('Reconnecting to Redis Queue...');
   });
 } catch (error) {
   logger.error('Failed to create Redis connection:');
