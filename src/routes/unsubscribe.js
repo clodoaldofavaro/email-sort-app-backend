@@ -48,7 +48,7 @@ router.post('/unsubscribe/batch', authenticateToken, async (req, res) => {
     for (const email of result.rows) {
       try {
         // Update status to in progress
-        await req.db.query(
+        await db.query(
           'UPDATE emails SET unsubscribe_status = $1, unsubscribe_attempted_at = NOW() WHERE id = $2',
           ['in_progress', email.id]
         );
