@@ -21,12 +21,9 @@ logger.info('Creating Redis connection for worker', {
 let connection;
 
 try {
-  connection = new Redis({
+  connection = new Redis(redisUrl, {
     maxRetriesPerRequest: null,
     enableReadyCheck: false,
-    host: process.env.REDIS_QUEUE_HOST,
-    port: process.env.REDIS_QUEUE_PORT,
-    password: process.env.REDIS_QUEUE_PASSWORD,
     tls: {},
     family: 6,
   });
