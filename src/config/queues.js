@@ -1,4 +1,4 @@
-// const { Queue } = require('bullmq');
+const { Queue } = require('bullmq');
 const Redis = require('ioredis');
 const logger = require('../utils/logger');
 
@@ -102,12 +102,9 @@ setTimeout(async () => {
           value: retrievedValue,
         });
 
-        // Queue operations test disabled - testing Redis only
-        /*
         logger.info('Testing BullMQ queue operations...');
         const jobCounts = await unsubscribeQueue.getJobCounts();
         logger.info('Queue job counts retrieved successfully', { counts: jobCounts });
-        */
       } else {
         logger.error('Queue Redis test failed - value mismatch', {
           expected: testValue,
