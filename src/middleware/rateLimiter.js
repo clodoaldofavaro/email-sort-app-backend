@@ -9,6 +9,17 @@ const createRateLimiter = (options = {}) => {
     message: options.message || 'Too many requests, please try again later.',
     standardHeaders: true,
     legacyHeaders: false,
+    // Fix for trust proxy issue when running behind Fly.io proxy
+    keyGenerator: (req) => {
+      // Use the X-Forwarded-For header if available (Fly.io sets this)
+      return req.headers['x-forwarded-for']?.split(',')[0].trim() || 
+             req.socket.remoteAddress || 
+             'unknown';
+    },
+    skip: (req) => {
+      // Skip rate limiting for health checks
+      return req.path === '/health';
+    },
     store: redis
       ? {
           incr: async key => {
