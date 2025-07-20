@@ -107,6 +107,11 @@ router.get('/:id', authenticateToken, async (req, res) => {
 router.get('/:id/content', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
+    
+    // Validate that id is a number
+    if (!/^\d+$/.test(id)) {
+      return res.status(400).json({ error: 'Invalid email ID format' });
+    }
 
     // First, get email metadata to get gmail_id and account info
     const emailResult = await db.query(
@@ -214,7 +219,7 @@ router.get('/:id/content', authenticateToken, async (req, res) => {
       // Cache the content in Redis with 24-hour TTL
       const ttl = 24 * 60 * 60; // 24 hours in seconds
       const cacheSuccess = await redis.setEx(cacheKey, ttl, JSON.stringify(content));
-      
+
       if (!cacheSuccess) {
         logger.warn(`Failed to cache email content for email ${id}, continuing without cache`);
       }
