@@ -68,6 +68,7 @@ logger.info('BullMQ queues created successfully', {
 (async () => {
   try {
     // Try to get queue status - this will force a connection
+    logger.info('trying to connect to queue');
     const unsubscribeQueueStatus = await unsubscribeQueue.getJobCounts();
     logger.info('Unsubscribe queue connected to Redis successfully', {
       status: unsubscribeQueueStatus,
