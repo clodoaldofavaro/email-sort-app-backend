@@ -9,25 +9,28 @@ class UnsubscribeService {
   }
 
   async initializeStagehand() {
-    if (this.stagehand) return this.stagehand;
+    try {
+      this.stagehand = new Stagehand({
+        env: 'BROWSERBASE',
+        apiKey: process.env.BROWSERBASE_API_KEY,
+        projectId: process.env.BROWSERBASE_PROJECT_ID,
 
-    this.stagehand = new Stagehand({
-      env: 'BROWSERBASE',
-      apiKey: process.env.BROWSERBASE_API_KEY,
-      projectId: process.env.BROWSERBASE_PROJECT_ID,
+        modelName: 'gpt-4o',
+        modelClientOptions: {
+          apiKey: process.env.OPENAI_API_KEY,
+        },
+        // Add timeout and other options
+        browserOptions: {
+          timeout: 60000, // Increase to 60 seconds
+        },
+      });
 
-      modelName: 'gpt-4o',
-      modelClientOptions: {
-        apiKey: process.env.OPENAI_API_KEY,
-      },
-      // Add timeout and other options
-      browserOptions: {
-        timeout: 60000, // Increase to 60 seconds
-      },
-    });
-
-    await this.stagehand.init();
-    return this.stagehand;
+      await this.stagehand.init();
+      return this.stagehand;
+    } catch (error) {
+      logger.error('Failed to initialize Stagehand:', { error: error.message, stack: error.stack });
+      throw error;
+    }
   }
 
   async unsubscribeFromEmail(unsubscribeLink) {
@@ -39,18 +42,45 @@ class UnsubscribeService {
 
       logger.info(`Navigating to unsubscribe link: ${unsubscribeLink}`);
 
-      // Navigate to the unsubscribe page
-      await page.goto(unsubscribeLink, {
-        waitUntil: 'networkidle',
-        timeout: 60000, // Increase to 60 seconds
-      });
+      // Navigate to the unsubscribe page with retry logic
+      const maxRetries = 3;
+      let lastError = null;
+      
+      for (let i = 0; i < maxRetries; i++) {
+        try {
+          await page.goto(unsubscribeLink, {
+            waitUntil: 'domcontentloaded', // Less strict than networkidle
+            timeout: 60000, // Increase to 60 seconds
+          });
+          lastError = null;
+          break;
+        } catch (error) {
+          lastError = error;
+          logger.warn(`Navigation attempt ${i + 1} failed:`, { error: error.message });
+          if (i < maxRetries - 1) {
+            await page.waitForTimeout(2000); // Wait before retry
+          }
+        }
+      }
+      
+      if (lastError) {
+        throw lastError;
+      }
 
       // Wait a moment for the page to fully load
       await page.waitForTimeout(2000);
 
       // First, let's observe what's on the page
       const pageAnalysis = await page.extract({
-        instruction: 'Analyze this unsubscribe page and identify what actions are needed. For pageType, use exactly one of these values: "form" (if there is a form to fill), "button" (if there is a button to click), "confirmation" (if already showing unsubscribe success), "already_unsubscribed" (if showing already unsubscribed message), or "error" (if showing an error page)',
+        instruction: `Analyze this unsubscribe page and identify what actions are needed. 
+        For pageType, use EXACTLY one of these values:
+        - "confirmation": if the page shows "You unsubscribed", "You've been unsubscribed", "Sorry to see you go", or similar confirmation that unsubscribe is complete
+        - "already_unsubscribed": if the page shows you were already unsubscribed previously
+        - "form": if there is a form with toggles, checkboxes, or inputs to manage email preferences
+        - "button": if there is a button to click to confirm unsubscribe
+        - "error": if showing an error page
+        
+        Important: If the page shows email preferences with toggle switches that are OFF, this likely means unsubscribe is already complete - use "confirmation"`,
         schema: z.object({
           pageType: z.enum(['form', 'button', 'confirmation', 'already_unsubscribed', 'error']),
           description: z.string(),
