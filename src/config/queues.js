@@ -29,6 +29,27 @@ logger.info('Bull queues created successfully', {
   queues: ['email-processing', 'unsubscribe']
 });
 
+// Test the actual Redis connection
+(async () => {
+  try {
+    // Try to get queue status - this will force a connection
+    const emailQueueStatus = await emailProcessingQueue.getJobCounts();
+    logger.info('Email processing queue connected to Redis successfully', { 
+      status: emailQueueStatus 
+    });
+    
+    const unsubscribeQueueStatus = await unsubscribeQueue.getJobCounts();
+    logger.info('Unsubscribe queue connected to Redis successfully', { 
+      status: unsubscribeQueueStatus 
+    });
+  } catch (error) {
+    logger.error('Failed to connect Bull queues to Redis', {
+      error: error.message,
+      stack: error.stack
+    });
+  }
+})();
+
 // Queue event handlers
 emailProcessingQueue.on('error', error => {
   logger.error('Email processing queue error:', error);
