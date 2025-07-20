@@ -35,7 +35,7 @@ try {
     port: redisPort,
   });
 
-  redisConnection = new Redis(redisUrl, { family: 6 });
+  redisConnection = new Redis(redisUrl, { family: 6, maxRetriesPerRequest: null });
 } catch (error) {
   logger.error('Error connecting worker to Redis', error);
   throw error;
