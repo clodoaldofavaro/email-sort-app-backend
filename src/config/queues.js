@@ -27,7 +27,7 @@ try {
   });
 
   // Following Upstash BullMQ documentation exactly
-  redisConnection = new Redis(redisUrl, {
+  redisConnection = new Redis({
     maxRetriesPerRequest: null,
     enableReadyCheck: false,
     tls: {},
