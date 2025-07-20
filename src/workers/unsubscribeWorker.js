@@ -1,5 +1,5 @@
 // const { Worker } = require('bullmq');
-const Redis = require('ioredis');
+const redis = require('redis');
 // const { unsubscribeQueue } = require('../config/queues');
 // const db = require('../config/database');
 // const unsubscribeService = require('../services/unsubscribe');
@@ -37,16 +37,18 @@ try {
     port: redisPort,
   });
 
-  connection = new Redis(redisUrl, {
-    maxRetriesPerRequest: null,
-    enableReadyCheck: false,
-    retryStrategy: (times) => {
-      if (times > 10) {
-        logger.error('Too many Redis worker reconnection attempts');
-        return null;
+  connection = redis.createClient({
+    url: redisUrl,
+    socket: {
+      connectTimeout: 5000,
+      reconnectStrategy: (retries) => {
+        if (retries > 10) {
+          logger.error('Too many Redis worker reconnection attempts');
+          return new Error('Too many retries');
+        }
+        return Math.min(retries * 100, 3000);
       }
-      return Math.min(times * 100, 3000);
-    },
+    }
   });
 } catch (error) {
   logger.error('Error connecting worker to Redis', error);
@@ -69,6 +71,16 @@ connection.on('error', err => {
 connection.on('close', () => {
   logger.warn('Worker Redis connection closed');
 });
+
+// Connect to Redis
+(async () => {
+  try {
+    await connection.connect();
+  } catch (error) {
+    logger.error('Failed to connect to Worker Redis:', error);
+  }
+})();
+logger.info('Worker Redis client created, attempting to connect...');
 
 /* COMMENTING OUT ALL WORKER CODE - TESTING REDIS CONNECTION ONLY
 // Process unsubscribe jobs using BullMQ Worker
@@ -325,7 +337,7 @@ setTimeout(async () => {
     const testValue = 'Worker Redis Connected at ' + new Date().toISOString();
     
     logger.info('Testing Worker Redis connection with set/get...');
-    await connection.setex(testKey, 60, testValue); // 60 second TTL
+    await connection.setEx(testKey, 60, testValue); // 60 second TTL
     
     const retrievedValue = await connection.get(testKey);
     if (retrievedValue === testValue) {

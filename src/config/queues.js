@@ -1,5 +1,5 @@
 // const { Queue } = require('bullmq');
-const Redis = require('ioredis');
+const redis = require('redis');
 const logger = require('../utils/logger');
 
 // Log all Redis-related environment variables for debugging
@@ -41,17 +41,19 @@ try {
     port: redisPort,
   });
 
-  // Create connection with BullMQ recommended settings
-  redisConnection = new Redis(redisUrl, {
-    maxRetriesPerRequest: null,
-    enableReadyCheck: false,
-    retryStrategy: times => {
-      if (times > 10) {
-        logger.error('Too many Redis queue reconnection attempts');
-        return null;
+  // Create connection using redis package like redisCache.js
+  redisConnection = redis.createClient({
+    url: redisUrl,
+    socket: {
+      connectTimeout: 5000,
+      reconnectStrategy: (retries) => {
+        if (retries > 10) {
+          logger.error('Too many Redis queue reconnection attempts');
+          return new Error('Too many retries');
+        }
+        return Math.min(retries * 100, 3000);
       }
-      return Math.min(times * 100, 3000);
-    },
+    }
   });
 
   // Test the connection
@@ -77,6 +79,17 @@ try {
   redisConnection.on('reconnecting', () => {
     logger.info('Reconnecting to Redis Queue...');
   });
+  
+  // Connect to Redis
+  (async () => {
+    try {
+      await redisConnection.connect();
+    } catch (error) {
+      logger.error('Failed to connect to Redis Queue:', error);
+      isConnected = false;
+    }
+  })();
+  logger.info('Redis Queue client created, attempting to connect...');
 } catch (error) {
   logger.error('Failed to create Redis connection:');
   throw error;
@@ -104,7 +117,7 @@ setTimeout(async () => {
       const testValue = 'Queue Redis Connected at ' + new Date().toISOString();
 
       logger.info('Testing Queue Redis connection with set/get...');
-      await redisConnection.setex(testKey, 60, testValue); // 60 second TTL
+      await redisConnection.setEx(testKey, 60, testValue); // 60 second TTL
 
       const retrievedValue = await redisConnection.get(testKey);
       if (retrievedValue === testValue) {
