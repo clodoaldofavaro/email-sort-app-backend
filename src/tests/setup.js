@@ -8,12 +8,16 @@ const mockDb = {
 };
 
 // Mock Redis if not available
-if (!process.env.REDIS_URL && !process.env.REDIS_HOST) {
-  jest.mock('../config/redis', () => ({
+if (!process.env.REDIS_URL && !process.env.REDIS_HOST && !process.env.REDIS_CACHE_URL && !process.env.REDIS_CACHE_HOST) {
+  jest.mock('../config/redisCache', () => ({
     get: jest.fn(),
     set: jest.fn(),
     del: jest.fn(),
+    setEx: jest.fn(),
+    isAvailable: jest.fn().mockReturnValue(false)
   }));
+  
+  jest.mock('../config/redisQueue', () => null);
 }
 
 // Mock external services for testing

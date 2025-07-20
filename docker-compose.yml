@@ -12,8 +12,10 @@ services:
       - NODE_ENV=development
       - PORT=8080
       - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/email_sort_app
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
+      - REDIS_CACHE_HOST=redis-cache
+      - REDIS_CACHE_PORT=6379
+      - REDIS_QUEUE_HOST=redis-queue
+      - REDIS_QUEUE_PORT=6379
       - JWT_SECRET=your-local-dev-secret-change-this
       # Add your Google OAuth credentials
       - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
@@ -29,7 +31,9 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      redis:
+      redis-cache:
+        condition: service_healthy
+      redis-queue:
         condition: service_healthy
     volumes:
       - ./src:/app/src
@@ -59,13 +63,29 @@ services:
       timeout: 5s
       retries: 5
 
-  redis:
+  redis-cache:
     image: redis:7-alpine
-    container_name: email-sort-redis
+    container_name: email-sort-redis-cache
     ports:
-      - "${REDIS_PORT:-6379}:6379"
+      - "${REDIS_CACHE_PORT:-6379}:6379"
     volumes:
-      - redis_data:/data
+      - redis_cache_data:/data
+    networks:
+      - email-sort-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    command: redis-server --appendonly yes
+
+  redis-queue:
+    image: redis:7-alpine
+    container_name: email-sort-redis-queue
+    ports:
+      - "${REDIS_QUEUE_PORT:-6380}:6379"
+    volumes:
+      - redis_queue_data:/data
     networks:
       - email-sort-network
     healthcheck:
@@ -113,7 +133,8 @@ services:
 
 volumes:
   postgres_data:
-  redis_data:
+  redis_cache_data:
+  redis_queue_data:
 
 networks:
   email-sort-network:

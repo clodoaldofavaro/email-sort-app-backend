@@ -1,7 +1,7 @@
 const express = require('express');
 const Joi = require('joi');
 const db = require('../config/database');
-const redis = require('../config/redis');
+const redis = require('../config/redisCache');
 const { authenticateToken } = require('../middleware/auth');
 const { getGmailClient, processNewEmails } = require('../services/gmail');
 const logger = require('../utils/logger');

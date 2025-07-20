@@ -4,12 +4,12 @@ const logger = require('../utils/logger');
 let client = null;
 let isConnected = false;
 
-// Create Redis client
+// Create Redis Cache client
 try {
   // Build Redis URL from host and port if not explicitly provided
-  const redisHost = process.env.REDIS_HOST || 'localhost';
-  const redisPort = process.env.REDIS_PORT || '6379';
-  const redisUrl = process.env.REDIS_URL || `redis://${redisHost}:${redisPort}`;
+  const redisHost = process.env.REDIS_CACHE_HOST || process.env.REDIS_HOST || 'localhost';
+  const redisPort = process.env.REDIS_CACHE_PORT || process.env.REDIS_PORT || '6379';
+  const redisUrl = process.env.REDIS_CACHE_URL || process.env.REDIS_URL || `redis://${redisHost}:${redisPort}`;
   
   client = redis.createClient({
     url: redisUrl,
@@ -31,12 +31,12 @@ try {
   });
 
   client.on('connect', () => {
-    logger.info('Connected to Redis');
+    logger.info('Connected to Redis Cache');
     isConnected = true;
   });
 
   client.on('disconnect', () => {
-    logger.warn('Disconnected from Redis');
+    logger.warn('Disconnected from Redis Cache');
     isConnected = false;
   });
 
