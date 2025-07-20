@@ -8,7 +8,7 @@ const mockDb = {
 };
 
 // Mock Redis if not available
-if (!process.env.REDIS_URL) {
+if (!process.env.REDIS_URL && !process.env.REDIS_HOST) {
   jest.mock('../config/redis', () => ({
     get: jest.fn(),
     set: jest.fn(),

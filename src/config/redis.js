@@ -6,8 +6,13 @@ let isConnected = false;
 
 // Create Redis client
 try {
+  // Build Redis URL from host and port if not explicitly provided
+  const redisHost = process.env.REDIS_HOST || 'localhost';
+  const redisPort = process.env.REDIS_PORT || '6379';
+  const redisUrl = process.env.REDIS_URL || `redis://${redisHost}:${redisPort}`;
+  
   client = redis.createClient({
-    url: process.env.REDIS_URL || 'redis://localhost:6379',
+    url: redisUrl,
     socket: {
       connectTimeout: 5000,
       reconnectStrategy: (retries) => {
