@@ -93,26 +93,47 @@ logger.info('BullMQ queues created successfully', {
 });
 
 // Test the actual Redis connection
-// (async () => {
-//   try {
-//     // Try to get queue status - this will force a connection
-//     logger.info('trying to connect to queue');
-//     const unsubscribeQueueStatus = await unsubscribeQueue.getJobCounts();
-//     logger.info('Unsubscribe queue connected to Redis successfully', {
-//       status: unsubscribeQueueStatus,
-//     });
-//   } catch (error) {
-//     logger.error('Failed to connect Bull queues to Redis', {
-//       error: error.message,
-//       stack: error.stack,
-//       code: error.code,
-//       errno: error.errno,
-//       syscall: error.syscall,
-//       hostname: error.hostname,
-//       fullError: JSON.stringify(error, null, 2),
-//     });
-//   }
-// })();
+setTimeout(async () => {
+  if (isConnected) {
+    try {
+      // Test with direct Redis commands using ioredis
+      const testKey = 'queue-redis-test-key';
+      const testValue = 'Queue Redis Connected at ' + new Date().toISOString();
+      
+      logger.info('Testing Queue Redis connection with set/get...');
+      await redisConnection.setex(testKey, 60, testValue); // 60 second TTL
+      
+      const retrievedValue = await redisConnection.get(testKey);
+      if (retrievedValue === testValue) {
+        logger.info('Queue Redis test successful!', { 
+          key: testKey, 
+          value: retrievedValue 
+        });
+        
+        // Also test queue operations
+        logger.info('Testing BullMQ queue operations...');
+        const jobCounts = await unsubscribeQueue.getJobCounts();
+        logger.info('Queue job counts retrieved successfully', { counts: jobCounts });
+      } else {
+        logger.error('Queue Redis test failed - value mismatch', {
+          expected: testValue,
+          received: retrievedValue
+        });
+      }
+    } catch (error) {
+      logger.error('Queue Redis test failed:', {
+        error: error.message,
+        stack: error.stack,
+        code: error.code,
+        errno: error.errno,
+        syscall: error.syscall,
+        hostname: error.hostname,
+      });
+    }
+  } else {
+    logger.warn('Redis connection not ready for testing');
+  }
+}, 2000); // Wait 2 seconds for connection to establish
 
 unsubscribeQueue.on('error', error => {
   logger.error('Unsubscribe queue error:', error);

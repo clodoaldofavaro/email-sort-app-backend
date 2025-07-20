@@ -56,6 +56,34 @@ try {
   (async () => {
     try {
       await client.connect();
+      
+      // Test Redis connection with set/get
+      setTimeout(async () => {
+        if (isConnected) {
+          try {
+            const testKey = 'redis-cache-test-key';
+            const testValue = 'Redis Cache Connected at ' + new Date().toISOString();
+            
+            logger.info('Testing Redis Cache connection with set/get...');
+            await client.setEx(testKey, 60, testValue); // 60 second TTL
+            
+            const retrievedValue = await client.get(testKey);
+            if (retrievedValue === testValue) {
+              logger.info('Redis Cache test successful!', { 
+                key: testKey, 
+                value: retrievedValue 
+              });
+            } else {
+              logger.error('Redis Cache test failed - value mismatch', {
+                expected: testValue,
+                received: retrievedValue
+              });
+            }
+          } catch (testError) {
+            logger.error('Redis Cache test failed:', testError);
+          }
+        }
+      }, 2000); // Wait 2 seconds for connection to establish
     } catch (error) {
       logger.error('Failed to connect to Redis Cache:', error);
       isConnected = false;

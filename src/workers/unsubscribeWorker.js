@@ -314,27 +314,47 @@ setInterval(
 ); // Run every hour
 
 // Test Redis connection on startup
-(async () => {
+setTimeout(async () => {
   try {
-    logger.info('Testing Redis connection for unsubscribe queue...');
-
-    // BullMQ doesn't have isReady(), use getJobCounts() to test connection
-    const counts = await unsubscribeQueue.getJobCounts();
-    logger.info('Unsubscribe queue job counts:', counts);
-
-    // Also test if we can get waiting jobs
-    const waitingJobs = await unsubscribeQueue.getWaitingCount();
-    logger.info('Unsubscribe queue waiting jobs:', waitingJobs);
+    logger.info('Testing Redis connection for unsubscribe worker...');
+    
+    // Test with direct Redis commands
+    const testKey = 'worker-redis-test-key';
+    const testValue = 'Worker Redis Connected at ' + new Date().toISOString();
+    
+    logger.info('Testing Worker Redis connection with set/get...');
+    await connection.setex(testKey, 60, testValue); // 60 second TTL
+    
+    const retrievedValue = await connection.get(testKey);
+    if (retrievedValue === testValue) {
+      logger.info('Worker Redis test successful!', { 
+        key: testKey, 
+        value: retrievedValue 
+      });
+      
+      // Test queue operations
+      const counts = await unsubscribeQueue.getJobCounts();
+      logger.info('Unsubscribe queue job counts:', counts);
+      
+      const waitingJobs = await unsubscribeQueue.getWaitingCount();
+      logger.info('Unsubscribe queue waiting jobs:', waitingJobs);
+    } else {
+      logger.error('Worker Redis test failed - value mismatch', {
+        expected: testValue,
+        received: retrievedValue
+      });
+    }
   } catch (error) {
-    logger.error('Failed to connect to Redis for unsubscribe queue:', {
+    logger.error('Worker Redis test failed:', {
       message: error.message,
       code: error.code,
       errno: error.errno,
       syscall: error.syscall,
       hostname: error.hostname,
+      stack: error.stack,
     });
   }
-})();
+}, 2000); // Wait 2 seconds for connection to establish
 
 logger.info('Unsubscribe worker started and processing jobs');
 
