@@ -1,8 +1,10 @@
 const express = require('express');
 const Joi = require('joi');
 const db = require('../config/database');
+const redis = require('../config/redis');
 const { authenticateToken } = require('../middleware/auth');
 const { getGmailClient, processNewEmails } = require('../services/gmail');
+const logger = require('../utils/logger');
 
 const router = express.Router();
 
@@ -98,6 +100,162 @@ router.get('/:id', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error('Error fetching email:', error);
     res.status(500).json({ error: 'Failed to fetch email' });
+  }
+});
+
+// Get email content from Gmail (on-demand fetch with caching)
+router.get('/:id/content', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // First, get email metadata to get gmail_id and account info
+    const emailResult = await db.query(
+      `SELECT e.id, e.gmail_id, e.subject, e.sender, e.account_id, ea.email as account_email, ea.refresh_token
+       FROM emails e
+       JOIN email_accounts ea ON e.account_id = ea.id
+       WHERE e.id = $1 AND e.user_id = $2`,
+      [id, req.user.id]
+    );
+
+    if (emailResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Email not found' });
+    }
+
+    const email = emailResult.rows[0];
+
+    if (!email.gmail_id) {
+      return res.status(400).json({ error: 'Email does not have a Gmail ID' });
+    }
+
+    // Check Redis cache first
+    const cacheKey = `email:${email.account_id}:${email.gmail_id}`;
+    const cachedContent = await redis.get(cacheKey);
+
+    if (cachedContent) {
+      logger.info(`Cache hit for email ${id} (Gmail ID: ${email.gmail_id})`);
+      return res.json({
+        id: email.id,
+        gmail_id: email.gmail_id,
+        subject: email.subject,
+        sender: email.sender,
+        content: JSON.parse(cachedContent),
+        cached: true,
+      });
+    }
+
+    // Cache miss - fetch from Gmail
+    logger.info(`Cache miss for email ${id} (Gmail ID: ${email.gmail_id}), fetching from Gmail`);
+
+    try {
+      // Get Gmail client for the account
+      const gmail = await getGmailClient(email.account_email, email.refresh_token);
+
+      // Fetch the email from Gmail
+      const gmailResponse = await gmail.users.messages.get({
+        userId: 'me',
+        id: email.gmail_id,
+        format: 'full',
+      });
+
+      // Extract email content
+      const emailContent = {
+        body: '',
+        html: '',
+        attachments: [],
+      };
+
+      // Helper function to decode base64url
+      const decodeBase64 = data => {
+        if (!data) return '';
+        // Replace URL-safe characters and add padding if needed
+        const base64 = data.replace(/-/g, '+').replace(/_/g, '/');
+        const padding = '='.repeat((4 - (base64.length % 4)) % 4);
+        return Buffer.from(base64 + padding, 'base64').toString('utf-8');
+      };
+
+      // Extract body from parts
+      const extractBody = parts => {
+        for (const part of parts) {
+          if (part.mimeType === 'text/html' && part.body.data) {
+            emailContent.html = decodeBase64(part.body.data);
+          } else if (part.mimeType === 'text/plain' && part.body.data) {
+            emailContent.body = decodeBase64(part.body.data);
+          } else if (part.parts) {
+            extractBody(part.parts);
+          }
+
+          // Check for attachments
+          if (part.filename) {
+            emailContent.attachments.push({
+              filename: part.filename,
+              mimeType: part.mimeType,
+              size: part.body.size,
+              attachmentId: part.body.attachmentId,
+            });
+          }
+        }
+      };
+
+      if (gmailResponse.data.payload.parts) {
+        extractBody(gmailResponse.data.payload.parts);
+      } else if (gmailResponse.data.payload.body.data) {
+        // Single part message
+        emailContent.body = decodeBase64(gmailResponse.data.payload.body.data);
+      }
+
+      // Use HTML content if available, otherwise use plain text
+      const content = {
+        body: emailContent.html || emailContent.body,
+        isHtml: !!emailContent.html,
+        attachments: emailContent.attachments,
+        fetchedAt: new Date().toISOString(),
+      };
+
+      // Cache the content in Redis with 24-hour TTL
+      const ttl = 24 * 60 * 60; // 24 hours in seconds
+      const cacheSuccess = await redis.setEx(cacheKey, ttl, JSON.stringify(content));
+      
+      if (!cacheSuccess) {
+        logger.warn(`Failed to cache email content for email ${id}, continuing without cache`);
+      }
+
+      res.json({
+        id: email.id,
+        gmail_id: email.gmail_id,
+        subject: email.subject,
+        sender: email.sender,
+        content: content,
+        cached: false,
+      });
+    } catch (gmailError) {
+      logger.error('Error fetching from Gmail:', gmailError);
+
+      // Handle specific Gmail errors
+      if (gmailError.code === 404) {
+        return res.status(404).json({
+          error: 'Email not found in Gmail',
+          message: 'This email may have been deleted from Gmail',
+        });
+      } else if (gmailError.code === 401) {
+        return res.status(401).json({
+          error: 'Gmail authentication failed',
+          message: 'Please reconnect your Gmail account',
+        });
+      } else if (gmailError.code === 429) {
+        return res.status(429).json({
+          error: 'Gmail rate limit exceeded',
+          message: 'Too many requests. Please try again later',
+        });
+      }
+
+      return res.status(500).json({
+        error: 'Failed to fetch email content',
+        message: gmailError.message,
+      });
+    }
+  } catch (error) {
+    logger.error('Error in email content endpoint:', error);
+    res.status(500).json({ error: 'Failed to retrieve email content' });
   }
 });
 
