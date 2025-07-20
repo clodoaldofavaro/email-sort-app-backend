@@ -43,14 +43,14 @@ try {
   });
 
   redisConnection.on('error', err => {
-    logger.error('Redis Queue connection error:', err);
+    logger.error('Redis Queue connection error');
   });
 
   redisConnection.on('close', () => {
     logger.warn('Redis Queue connection closed');
   });
 } catch (error) {
-  logger.error('Failed to create Redis connection:', error);
+  logger.error('Failed to create Redis connection:');
   throw error;
 }
 
@@ -68,11 +68,6 @@ logger.info('BullMQ queues created successfully', {
 (async () => {
   try {
     // Try to get queue status - this will force a connection
-    const emailQueueStatus = await emailProcessingQueue.getJobCounts();
-    logger.info('Email processing queue connected to Redis successfully', {
-      status: emailQueueStatus,
-    });
-
     const unsubscribeQueueStatus = await unsubscribeQueue.getJobCounts();
     logger.info('Unsubscribe queue connected to Redis successfully', {
       status: unsubscribeQueueStatus,
