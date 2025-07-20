@@ -5,48 +5,26 @@ const logger = require('../utils/logger');
 logger.info('Redis Queue Environment Variables:', {
   REDIS_QUEUE_URL: process.env.REDIS_QUEUE_URL ? 'Set (hidden)' : 'Not set',
   REDIS_QUEUE_HOST: process.env.REDIS_QUEUE_HOST || 'Not set',
-  REDIS_QUEUE_PORT: process.env.REDIS_QUEUE_PORT || 'Not set',
-  REDIS_URL: process.env.REDIS_URL ? 'Set (hidden)' : 'Not set',
-  REDIS_HOST: process.env.REDIS_HOST || 'Not set',
-  REDIS_PORT: process.env.REDIS_PORT || 'Not set'
+  REDIS_QUEUE_PORT: process.env.REDIS_QUEUE_PORT || 'Not set'
 });
 
-// Redis connection for queues
-const redisQueueConfig = {
-  redis: {
-    host: process.env.REDIS_QUEUE_HOST || process.env.REDIS_HOST || 'localhost',
-    port: process.env.REDIS_QUEUE_PORT || process.env.REDIS_PORT || '6380',
-  },
-};
+// Get Redis URL for queues
+const redisUrl = process.env.REDIS_QUEUE_URL || process.env.REDIS_URL;
 
-// Only add password if it exists
-const password = process.env.REDIS_QUEUE_PASSWORD || process.env.REDIS_PASSWORD;
-if (password) {
-  redisQueueConfig.redis.password = password;
+if (!redisUrl) {
+  logger.error('No Redis URL configured for queues!');
+  throw new Error('REDIS_QUEUE_URL or REDIS_URL must be set');
 }
 
-// If REDIS_QUEUE_URL is provided, use it instead
-if (process.env.REDIS_QUEUE_URL || process.env.REDIS_URL) {
-  redisQueueConfig.redis = process.env.REDIS_QUEUE_URL || process.env.REDIS_URL;
-  const urlToLog = redisQueueConfig.redis || '';
-  // Log Redis configuration (similar to what redisQueue.js had)
-  const sanitizedUrl = urlToLog.replace(/:([^:@]+)@/, ':****@');
-  logger.info('Initializing Redis Queue for Bull', { 
-    url: sanitizedUrl,
-    fullUrl: urlToLog // Show full URL for debugging
-  });
-} else {
-  logger.info('Using Redis host/port configuration for Bull queues', {
-    host: redisQueueConfig.redis.host,
-    port: redisQueueConfig.redis.port,
-    hasPassword: !!redisQueueConfig.redis.password
-  });
-}
+logger.info('Initializing Bull queues with Redis URL', {
+  url: redisUrl.replace(/:([^:@]+)@/, ':****@'),
+  fullUrl: redisUrl // Show full URL for debugging
+});
 
-// Create queues
+// Create queues - Bull will handle the connection using ioredis internally
 logger.info('Creating Bull queues...');
-const emailProcessingQueue = new Bull('email-processing', redisQueueConfig);
-const unsubscribeQueue = new Bull('unsubscribe', redisQueueConfig);
+const emailProcessingQueue = new Bull('email-processing', redisUrl);
+const unsubscribeQueue = new Bull('unsubscribe', redisUrl);
 logger.info('Bull queues created successfully', {
   queues: ['email-processing', 'unsubscribe']
 });
