@@ -1,5 +1,5 @@
 const { Worker } = require('bullmq');
-const redis = require('ioredis');
+const Redis = require('ioredis');
 const { unsubscribeQueue } = require('../config/queues');
 const db = require('../config/database');
 const unsubscribeService = require('../services/unsubscribe');
@@ -58,23 +58,14 @@ redisConnection.on('close', () => {
   logger.warn('Worker Redis connection closed');
 });
 
-// Connect to Redis
-(async () => {
-  try {
-    await redisConnection.connect();
-  } catch (error) {
-    logger.error('Failed to connect to Worker Redis:', error);
-  }
-})();
-logger.info('Worker Redis client created, attempting to connect...');
+// ioredis connects automatically, no need for manual connect
+logger.info('Worker Redis client created with ioredis');
 
-/* COMMENTING OUT ALL WORKER CODE - TESTING REDIS CONNECTION ONLY
-// Process unsubscribe jobs using BullMQ Worker
 let unsubscribeWorker;
 try {
   logger.info('Creating BullMQ Worker for unsubscribe queue...');
 
-  // Create Worker with the connection
+  // Create Worker with the same connection as the queue
   unsubscribeWorker = new Worker(
     'unsubscribe',
     async job => {
@@ -241,8 +232,8 @@ try {
       }
     },
     {
-      // Use the connection we created above
-      connection: connection,
+      // Use the same connection as the queue
+      connection: redisConnection,
       // Configure worker settings
       concurrency: 5,
       removeOnComplete: { count: 100 },
@@ -262,10 +253,7 @@ try {
   });
   throw error;
 }
-*/
 
-// Worker event handlers
-/* COMMENTING OUT WORKER EVENT HANDLERS
 unsubscribeWorker.on('completed', (job, result) => {
   logger.info(`Unsubscribe job ${job.id} completed:`, result);
 });
@@ -294,10 +282,9 @@ unsubscribeWorker.on('error', error => {
     fullError: error,
   });
 });
-*/
 
 // Clean up completed jobs periodically - DISABLED
-/*
+
 setInterval(
   async () => {
     try {
@@ -311,7 +298,6 @@ setInterval(
   },
   60 * 60 * 1000
 ); // Run every hour
-*/
 
 // Test Redis connection on startup
 setTimeout(async () => {
@@ -323,7 +309,7 @@ setTimeout(async () => {
     const testValue = 'Worker Redis Connected at ' + new Date().toISOString();
 
     logger.info('Testing Worker Redis connection with set/get...');
-    await redisConnection.setEx(testKey, 60, testValue); // 60 second TTL
+    await redisConnection.setex(testKey, 60, testValue); // 60 second TTL
 
     const retrievedValue = await redisConnection.get(testKey);
     if (retrievedValue === testValue) {
@@ -360,11 +346,11 @@ logger.info('Redis connection test complete');
 // Graceful shutdown
 process.on('SIGTERM', async () => {
   logger.info('SIGTERM received, closing worker...');
-  /* COMMENTING OUT WORKER CLOSE
+
   if (unsubscribeWorker) {
     await unsubscribeWorker.close();
   }
-  */
+
   if (redisConnection) {
     redisConnection.disconnect();
   }
@@ -372,4 +358,4 @@ process.on('SIGTERM', async () => {
 });
 
 // No exports - just testing Redis connection
-module.exports = {};
+module.exports = { unsubscribeWorker };
