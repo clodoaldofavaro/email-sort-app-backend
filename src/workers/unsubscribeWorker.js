@@ -1,3 +1,5 @@
+const { Worker } = require('bullmq');
+const Redis = require('ioredis');
 const { unsubscribeQueue } = require('../config/queues');
 const db = require('../config/database');
 const unsubscribeService = require('../services/unsubscribe');
@@ -5,12 +7,47 @@ const logger = require('../utils/logger');
 
 logger.info('Starting unsubscribe worker initialization...');
 
-// Process unsubscribe jobs
+// Create Redis connection for worker following Upstash docs
+const redisUrl = process.env.REDIS_QUEUE_URL || process.env.REDIS_URL;
+if (!redisUrl) {
+  throw new Error('REDIS_QUEUE_URL is required for worker');
+}
+
+logger.info('Creating Redis connection for worker', {
+  url: redisUrl.replace(/:([^:@]+)@/, ':****@')
+});
+
+const connection = new Redis(redisUrl, {
+  maxRetriesPerRequest: null,
+  enableReadyCheck: false,
+  tls: {}
+});
+
+// Connection event handlers for debugging
+connection.on('connect', () => {
+  logger.info('Worker Redis connection established');
+});
+
+connection.on('ready', () => {
+  logger.info('Worker Redis connection ready');
+});
+
+connection.on('error', (err) => {
+  logger.error('Worker Redis connection error:', err);
+});
+
+connection.on('close', () => {
+  logger.warn('Worker Redis connection closed');
+});
+
+// Process unsubscribe jobs using BullMQ Worker
+let unsubscribeWorker;
 try {
-  logger.info('Attempting to register job processor for unsubscribe-email...');
+  logger.info('Creating BullMQ Worker for unsubscribe queue...');
   
-  unsubscribeQueue.process('unsubscribe-email', async (job) => {
-  const { batchJobId, userId, emailId, unsubscribeLink, subject, sender } = job.data;
+  // Create Worker with the connection
+  unsubscribeWorker = new Worker('unsubscribe', async (job) => {
+    const { batchJobId, userId, emailId, unsubscribeLink, subject, sender } = job.data;
   
   logger.info(`Processing unsubscribe job for email ${emailId} in batch ${batchJobId}`);
   
@@ -167,14 +204,21 @@ try {
       logger.error('Failed to update email status after error:', updateError);
     }
 
-    // Throw error to trigger Bull retry mechanism
+    // Throw error to trigger BullMQ retry mechanism
     throw error;
   }
+  }, {
+    // Use the connection we created above
+    connection: connection,
+    // Configure worker settings
+    concurrency: 5,
+    removeOnComplete: { count: 100 },
+    removeOnFail: { count: 50 }
   });
 
-  logger.info('Job processor registered successfully for unsubscribe-email');
+  logger.info('BullMQ Worker created successfully for unsubscribe queue');
 } catch (error) {
-  logger.error('Failed to register unsubscribe job processor:', {
+  logger.error('Failed to create BullMQ Worker:', {
     error: error.message,
     stack: error.stack,
     code: error.code,
@@ -185,12 +229,12 @@ try {
   throw error;
 }
 
-// Queue event handlers
-unsubscribeQueue.on('completed', (job, result) => {
+// Worker event handlers
+unsubscribeWorker.on('completed', (job, result) => {
   logger.info(`Unsubscribe job ${job.id} completed:`, result);
 });
 
-unsubscribeQueue.on('failed', (job, err) => {
+unsubscribeWorker.on('failed', (job, err) => {
   logger.error(`Unsubscribe job ${job.id} failed:`, {
     error: err.message,
     stack: err.stack,
@@ -198,13 +242,13 @@ unsubscribeQueue.on('failed', (job, err) => {
   });
 });
 
-unsubscribeQueue.on('stalled', (job) => {
-  logger.warn(`Unsubscribe job ${job.id} stalled`, job.data);
+unsubscribeWorker.on('stalled', (jobId) => {
+  logger.warn(`Unsubscribe job ${jobId} stalled`);
 });
 
-// Error handler for batch job failures
-unsubscribeQueue.on('error', (error) => {
-  logger.error('Unsubscribe queue error:', {
+// Error handler for worker failures
+unsubscribeWorker.on('error', (error) => {
+  logger.error('Unsubscribe worker error:', {
     message: error.message,
     stack: error.stack,
     code: error.code,
@@ -249,4 +293,16 @@ setInterval(async () => {
 
 logger.info('Unsubscribe worker started and processing jobs');
 
-module.exports = unsubscribeQueue;
+// Graceful shutdown
+process.on('SIGTERM', async () => {
+  logger.info('SIGTERM received, closing worker...');
+  if (unsubscribeWorker) {
+    await unsubscribeWorker.close();
+  }
+  if (connection) {
+    connection.disconnect();
+  }
+  process.exit(0);
+});
+
+module.exports = unsubscribeWorker;

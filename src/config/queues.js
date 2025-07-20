@@ -1,4 +1,5 @@
-const Bull = require('bull');
+const { Queue } = require('bullmq');
+const Redis = require('ioredis');
 const logger = require('../utils/logger');
 
 // Log all Redis-related environment variables for debugging
@@ -9,32 +10,63 @@ logger.info('Redis Queue Environment Variables:', {
   REDIS_QUEUE_URL: process.env.REDIS_QUEUE_URL ? 'Set (hidden)' : 'Not set'
 });
 
-// Get Redis URL for queues
-const redisUrl = process.env.REDIS_QUEUE_URL || 
-                process.env.REDIS_URL || 
-                (process.env.REDIS_QUEUE_HOST && process.env.REDIS_QUEUE_PASSWORD ? 
-                  `redis://default:${process.env.REDIS_QUEUE_PASSWORD}@${process.env.REDIS_QUEUE_HOST}:${process.env.REDIS_QUEUE_PORT || 6379}` : 
-                  null);
+// Create Redis connection following Upstash BullMQ guide
+let redisConnection;
 
-if (!redisUrl) {
-  logger.error('No Redis configuration for queues!');
-  throw new Error('REDIS_QUEUE_URL or REDIS_QUEUE_HOST + REDIS_QUEUE_PASSWORD must be set');
+try {
+  // Upstash recommends using the URL directly with specific options
+  const redisUrl = process.env.REDIS_QUEUE_URL || process.env.REDIS_URL;
+  
+  if (!redisUrl) {
+    throw new Error('REDIS_QUEUE_URL must be set');
+  }
+  
+  logger.info('Creating Redis connection for BullMQ (Upstash)', {
+    url: redisUrl.replace(/:([^:@]+)@/, ':****@')
+  });
+  
+  // Following Upstash BullMQ documentation exactly
+  redisConnection = new Redis(redisUrl, {
+    maxRetriesPerRequest: null,
+    enableReadyCheck: false,
+    // Upstash specific
+    tls: {}
+  });
+
+  // Test the connection
+  redisConnection.on('connect', () => {
+    logger.info('Redis Queue connection established');
+  });
+
+  redisConnection.on('ready', () => {
+    logger.info('Redis Queue connection ready');
+  });
+
+  redisConnection.on('error', (err) => {
+    logger.error('Redis Queue connection error:', err);
+  });
+
+  redisConnection.on('close', () => {
+    logger.warn('Redis Queue connection closed');
+  });
+
+} catch (error) {
+  logger.error('Failed to create Redis connection:', error);
+  throw error;
 }
 
-logger.info('Using Redis URL directly for Bull queues', {
-  url: redisUrl.replace(/:([^:@]+)@/, ':****@'),
-  fullUrl: redisUrl // Show full URL for debugging
+logger.info('Creating BullMQ queues with explicit Redis connection...');
+
+// Create queues with the explicit connection
+const emailProcessingQueue = new Queue('email-processing', {
+  connection: redisConnection
 });
 
-// Pass URL directly to Bull - let it handle the connection
-const redisConfig = redisUrl;
+const unsubscribeQueue = new Queue('unsubscribe', {
+  connection: redisConnection
+});
 
-logger.info('Creating Bull queues...');
-
-// Create queues with the parsed configuration
-const emailProcessingQueue = new Bull('email-processing', redisConfig);
-const unsubscribeQueue = new Bull('unsubscribe', redisConfig);
-logger.info('Bull queues created successfully', {
+logger.info('BullMQ queues created successfully', {
   queues: ['email-processing', 'unsubscribe']
 });
 
@@ -114,4 +146,5 @@ logger.info('Bull queues module initialized and exported');
 module.exports = {
   emailProcessingQueue,
   unsubscribeQueue,
+  redisConnection
 };
