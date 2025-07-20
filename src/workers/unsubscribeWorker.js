@@ -53,6 +53,7 @@ connection.on('close', () => {
 
 // Process unsubscribe jobs using BullMQ Worker
 let unsubscribeWorker;
+/* COMMENTING OUT WORKER TO TEST QUEUE CONNECTION
 try {
   logger.info('Creating BullMQ Worker for unsubscribe queue...');
 
@@ -244,8 +245,10 @@ try {
   });
   throw error;
 }
+*/
 
 // Worker event handlers
+/* COMMENTING OUT WORKER EVENT HANDLERS
 unsubscribeWorker.on('completed', (job, result) => {
   logger.info(`Unsubscribe job ${job.id} completed:`, result);
 });
@@ -274,6 +277,7 @@ unsubscribeWorker.on('error', error => {
     fullError: error,
   });
 });
+*/
 
 // Clean up completed jobs periodically
 setInterval(
@@ -318,13 +322,16 @@ logger.info('Unsubscribe worker started and processing jobs');
 // Graceful shutdown
 process.on('SIGTERM', async () => {
   logger.info('SIGTERM received, closing worker...');
+  /* COMMENTING OUT WORKER CLOSE
   if (unsubscribeWorker) {
     await unsubscribeWorker.close();
   }
+  */
   if (connection) {
     connection.disconnect();
   }
   process.exit(0);
 });
 
-module.exports = unsubscribeWorker;
+// module.exports = unsubscribeWorker;
+module.exports = {}; // Export empty object for now
