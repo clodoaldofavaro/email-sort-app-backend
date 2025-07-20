@@ -67,7 +67,7 @@ try {
   redisConnection.on('reconnecting', () => {
     logger.info('Reconnecting to Redis Queue...');
   });
-  
+
   logger.info('Redis Queue client created with ioredis and family: 6');
 } catch (error) {
   logger.error('Failed to create Redis connection:');
@@ -92,7 +92,7 @@ setTimeout(async () => {
   if (isConnected) {
     try {
       // Test with direct Redis commands using ioredis
-      const testKey = 'queue-redis-test-key';
+      const testKey = 'queue-redis-test-key-hello';
       const testValue = 'Queue Redis Connected at ' + new Date().toISOString();
 
       logger.info('Testing Queue Redis connection with set/get...');
