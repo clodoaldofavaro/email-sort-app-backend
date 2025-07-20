@@ -12,7 +12,7 @@ const router = express.Router();
 router.get('/category/:categoryId', authenticateToken, async (req, res) => {
   try {
     const { categoryId } = req.params;
-    const { page = 1, limit = 20, accountId, hasUnsubscribe } = req.query;
+    const { page = 1, limit = 20, accountId, hasUnsubscribe, unsubscribeStatus } = req.query;
     const offset = (page - 1) * limit;
 
     // Verify category belongs to user
@@ -49,6 +49,17 @@ router.get('/category/:categoryId', authenticateToken, async (req, res) => {
       whereClause += ' AND e.unsubscribe_link IS NOT NULL';
     } else if (hasUnsubscribe === 'false') {
       whereClause += ' AND e.unsubscribe_link IS NULL';
+    }
+
+    // Add unsubscribe status filter
+    if (unsubscribeStatus) {
+      if (unsubscribeStatus === 'none') {
+        // Emails with unsubscribe link but not attempted
+        whereClause += ' AND e.unsubscribe_link IS NOT NULL AND e.unsubscribe_status IS NULL';
+      } else if (['completed', 'failed', 'in_progress'].includes(unsubscribeStatus)) {
+        whereClause += ` AND e.unsubscribe_status = $${queryParams.length + 1}`;
+        queryParams.push(unsubscribeStatus);
+      }
     }
 
     const result = await db.query(

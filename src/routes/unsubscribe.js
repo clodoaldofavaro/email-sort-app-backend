@@ -25,12 +25,13 @@ router.post('/unsubscribe/batch', authenticateToken, async (req, res) => {
       });
     }
 
-    // Get emails with unsubscribe links
+    // Get emails with unsubscribe links that haven't been successfully unsubscribed
     const placeholders = emailIds.map((_, index) => `$${index + 2}`).join(',');
     const result = await db.query(
-      `SELECT id, subject, sender, unsubscribe_link 
+      `SELECT id, subject, sender, unsubscribe_link, unsubscribe_status 
        FROM emails 
-       WHERE id IN (${placeholders}) AND user_id = $1 AND unsubscribe_link IS NOT NULL`,
+       WHERE id IN (${placeholders}) AND user_id = $1 AND unsubscribe_link IS NOT NULL 
+       AND (unsubscribe_status IS NULL OR unsubscribe_status != 'completed')`,
       [req.user.id, ...emailIds]
     );
 
@@ -143,12 +144,13 @@ router.post('/unsubscribe/async/batch', authenticateToken, async (req, res) => {
     // No limit on batch size for async processing
     logger.info(`Received async batch unsubscribe request for ${emailIds.length} emails`);
 
-    // Verify all emails belong to user and have unsubscribe links
+    // Verify all emails belong to user and have unsubscribe links and not already unsubscribed
     const placeholders = emailIds.map((_, index) => `$${index + 2}`).join(',');
     const result = await db.query(
-      `SELECT id, subject, sender, unsubscribe_link 
+      `SELECT id, subject, sender, unsubscribe_link, unsubscribe_status 
        FROM emails 
-       WHERE id IN (${placeholders}) AND user_id = $1 AND unsubscribe_link IS NOT NULL`,
+       WHERE id IN (${placeholders}) AND user_id = $1 AND unsubscribe_link IS NOT NULL
+       AND (unsubscribe_status IS NULL OR unsubscribe_status != 'completed')`,
       [req.user.id, ...emailIds]
     );
 
