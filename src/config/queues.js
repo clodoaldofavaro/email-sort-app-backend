@@ -27,14 +27,11 @@ try {
   });
 
   // Following Upstash BullMQ documentation exactly
-  redisConnection = new Redis({
+  redisConnection = new Redis(redisUrl, {
     maxRetriesPerRequest: null,
     enableReadyCheck: false,
     tls: {},
     family: 6,
-    host: process.env.REDIS_QUEUE_HOST,
-    port: process.env.REDIS_QUEUE_PORT,
-    password: process.env.REDIS_QUEUE_PASSWORD,
   });
 
   // Test the connection
@@ -69,26 +66,26 @@ logger.info('BullMQ queues created successfully', {
 });
 
 // Test the actual Redis connection
-(async () => {
-  try {
-    // Try to get queue status - this will force a connection
-    logger.info('trying to connect to queue');
-    const unsubscribeQueueStatus = await unsubscribeQueue.getJobCounts();
-    logger.info('Unsubscribe queue connected to Redis successfully', {
-      status: unsubscribeQueueStatus,
-    });
-  } catch (error) {
-    logger.error('Failed to connect Bull queues to Redis', {
-      error: error.message,
-      stack: error.stack,
-      code: error.code,
-      errno: error.errno,
-      syscall: error.syscall,
-      hostname: error.hostname,
-      fullError: JSON.stringify(error, null, 2),
-    });
-  }
-})();
+// (async () => {
+//   try {
+//     // Try to get queue status - this will force a connection
+//     logger.info('trying to connect to queue');
+//     const unsubscribeQueueStatus = await unsubscribeQueue.getJobCounts();
+//     logger.info('Unsubscribe queue connected to Redis successfully', {
+//       status: unsubscribeQueueStatus,
+//     });
+//   } catch (error) {
+//     logger.error('Failed to connect Bull queues to Redis', {
+//       error: error.message,
+//       stack: error.stack,
+//       code: error.code,
+//       errno: error.errno,
+//       syscall: error.syscall,
+//       hostname: error.hostname,
+//       fullError: JSON.stringify(error, null, 2),
+//     });
+//   }
+// })();
 
 unsubscribeQueue.on('error', error => {
   logger.error('Unsubscribe queue error:', error);
@@ -119,5 +116,4 @@ logger.info('Bull queues module initialized and exported');
 
 module.exports = {
   unsubscribeQueue,
-  redisConnection,
 };
