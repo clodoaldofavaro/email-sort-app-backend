@@ -7,7 +7,7 @@ logger.info('Redis Queue Environment Variables:', {
   REDIS_QUEUE_HOST: process.env.REDIS_QUEUE_HOST || 'Not set',
   REDIS_QUEUE_PORT: process.env.REDIS_QUEUE_PORT || 'Not set',
   REDIS_QUEUE_PASSWORD: process.env.REDIS_QUEUE_PASSWORD ? 'Set (hidden)' : 'Not set',
-  REDIS_QUEUE_URL: process.env.REDIS_QUEUE_URL ? 'Set (hidden)' : 'Not set'
+  REDIS_QUEUE_URL: process.env.REDIS_QUEUE_URL ? 'Set (hidden)' : 'Not set',
 });
 
 // Create Redis connection following Upstash BullMQ guide
@@ -16,21 +16,21 @@ let redisConnection;
 try {
   // Upstash recommends using the URL directly with specific options
   const redisUrl = process.env.REDIS_QUEUE_URL || process.env.REDIS_URL;
-  
+
   if (!redisUrl) {
     throw new Error('REDIS_QUEUE_URL must be set');
   }
-  
+
   logger.info('Creating Redis connection for BullMQ (Upstash)', {
-    url: redisUrl.replace(/:([^:@]+)@/, ':****@')
+    url: redisUrl.replace(/:([^:@]+)@/, ':****@'),
+    fullUrl: redisUrl,
   });
-  
+
   // Following Upstash BullMQ documentation exactly
   redisConnection = new Redis(redisUrl, {
     maxRetriesPerRequest: null,
     enableReadyCheck: false,
-    // Upstash specific
-    tls: {}
+    tls: {},
   });
 
   // Test the connection
@@ -42,14 +42,13 @@ try {
     logger.info('Redis Queue connection ready');
   });
 
-  redisConnection.on('error', (err) => {
+  redisConnection.on('error', err => {
     logger.error('Redis Queue connection error:', err);
   });
 
   redisConnection.on('close', () => {
     logger.warn('Redis Queue connection closed');
   });
-
 } catch (error) {
   logger.error('Failed to create Redis connection:', error);
   throw error;
@@ -57,17 +56,12 @@ try {
 
 logger.info('Creating BullMQ queues with explicit Redis connection...');
 
-// Create queues with the explicit connection
-const emailProcessingQueue = new Queue('email-processing', {
-  connection: redisConnection
-});
-
 const unsubscribeQueue = new Queue('unsubscribe', {
-  connection: redisConnection
+  connection: redisConnection,
 });
 
 logger.info('BullMQ queues created successfully', {
-  queues: ['email-processing', 'unsubscribe']
+  queues: ['email-processing', 'unsubscribe'],
 });
 
 // Test the actual Redis connection
@@ -75,46 +69,21 @@ logger.info('BullMQ queues created successfully', {
   try {
     // Try to get queue status - this will force a connection
     const emailQueueStatus = await emailProcessingQueue.getJobCounts();
-    logger.info('Email processing queue connected to Redis successfully', { 
-      status: emailQueueStatus 
+    logger.info('Email processing queue connected to Redis successfully', {
+      status: emailQueueStatus,
     });
-    
+
     const unsubscribeQueueStatus = await unsubscribeQueue.getJobCounts();
-    logger.info('Unsubscribe queue connected to Redis successfully', { 
-      status: unsubscribeQueueStatus 
+    logger.info('Unsubscribe queue connected to Redis successfully', {
+      status: unsubscribeQueueStatus,
     });
   } catch (error) {
     logger.error('Failed to connect Bull queues to Redis', {
       error: error.message,
-      stack: error.stack
+      stack: error.stack,
     });
   }
 })();
-
-// Queue event handlers
-emailProcessingQueue.on('error', error => {
-  logger.error('Email processing queue error:', error);
-});
-
-emailProcessingQueue.on('ready', () => {
-  logger.info('Email processing queue is ready and connected to Redis');
-});
-
-emailProcessingQueue.on('connect', () => {
-  logger.info('Email processing queue connected to Redis successfully');
-});
-
-emailProcessingQueue.on('disconnect', () => {
-  logger.warn('Email processing queue disconnected from Redis');
-});
-
-emailProcessingQueue.on('reconnecting', () => {
-  logger.info('Email processing queue reconnecting to Redis...');
-});
-
-emailProcessingQueue.on('stalled', job => {
-  logger.warn('Email processing job stalled', { jobId: job?.id });
-});
 
 unsubscribeQueue.on('error', error => {
   logger.error('Unsubscribe queue error:', error);
@@ -144,7 +113,6 @@ unsubscribeQueue.on('stalled', job => {
 logger.info('Bull queues module initialized and exported');
 
 module.exports = {
-  emailProcessingQueue,
   unsubscribeQueue,
-  redisConnection
+  redisConnection,
 };
