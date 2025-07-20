@@ -26,7 +26,7 @@ if (process.env.REDIS_QUEUE_URL || process.env.REDIS_URL) {
   const urlToLog = redisQueueConfig.redis || '';
   logger.info('Using Redis URL for Bull queues', { 
     url: urlToLog.replace(/:([^:@]+)@/, ':****@'),
-    fullUrl: urlToLog // Temporary for debugging - remove after fixing
+    fullUrl: urlToLog // Show full URL for debugging
   });
 } else {
   logger.info('Using Redis host/port configuration for Bull queues', {
