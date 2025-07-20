@@ -25,7 +25,6 @@ try {
     maxRetriesPerRequest: null,
     enableReadyCheck: false,
     tls: {},
-    family: 6,
   });
 } catch (error) {
   logger.error('Error connecting worker to Redis', { url: redisUrl, connection });

@@ -31,7 +31,6 @@ try {
     maxRetriesPerRequest: null,
     enableReadyCheck: false,
     tls: {},
-    family: 6,
   });
 
   // Test the connection
