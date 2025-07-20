@@ -16,9 +16,14 @@ const redisQueueConfig = {
   redis: {
     host: process.env.REDIS_QUEUE_HOST || process.env.REDIS_HOST || 'localhost',
     port: process.env.REDIS_QUEUE_PORT || process.env.REDIS_PORT || '6380',
-    password: process.env.REDIS_QUEUE_PASSWORD || process.env.REDIS_PASSWORD || undefined,
   },
 };
+
+// Only add password if it exists
+const password = process.env.REDIS_QUEUE_PASSWORD || process.env.REDIS_PASSWORD;
+if (password) {
+  redisQueueConfig.redis.password = password;
+}
 
 // If REDIS_QUEUE_URL is provided, use it instead
 if (process.env.REDIS_QUEUE_URL || process.env.REDIS_URL) {
