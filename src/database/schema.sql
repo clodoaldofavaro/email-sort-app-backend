@@ -50,7 +50,6 @@ CREATE TABLE IF NOT EXISTS emails (
     gmail_id VARCHAR(255) NOT NULL,
     subject TEXT NOT NULL,
     sender VARCHAR(255) NOT NULL,
-    body TEXT NOT NULL,
     ai_summary TEXT,
     unsubscribe_link TEXT,
     received_at TIMESTAMP NOT NULL,
