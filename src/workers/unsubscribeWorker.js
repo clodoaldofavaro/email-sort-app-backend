@@ -1,21 +1,19 @@
-// const { Worker } = require('bullmq');
-const redis = require('redis');
-// const { unsubscribeQueue } = require('../config/queues');
-// const db = require('../config/database');
-// const unsubscribeService = require('../services/unsubscribe');
+const { Worker } = require('bullmq');
+const redis = require('ioredis');
+const { unsubscribeQueue } = require('../config/queues');
+const db = require('../config/database');
+const unsubscribeService = require('../services/unsubscribe');
 const logger = require('../utils/logger');
 
 logger.info('Redis connection test for worker file...');
-
-// Create Redis connection for worker following same pattern as redisCache.js
-let connection;
+let redisConnection;
 
 try {
   // Build Redis URL from components if not explicitly provided
   const redisHost = process.env.REDIS_QUEUE_HOST || process.env.REDIS_HOST || 'localhost';
   const redisPort = process.env.REDIS_QUEUE_PORT || process.env.REDIS_PORT || '6379';
   const redisPassword = process.env.REDIS_QUEUE_PASSWORD || process.env.REDIS_PASSWORD;
-  
+
   // Construct URL with auth if password exists
   let redisUrl;
   if (redisPassword) {
@@ -23,7 +21,7 @@ try {
   } else {
     redisUrl = `redis://${redisHost}:${redisPort}`;
   }
-  
+
   // Override with explicit URL if provided
   if (process.env.REDIS_QUEUE_URL) {
     redisUrl = process.env.REDIS_QUEUE_URL;
@@ -37,45 +35,33 @@ try {
     port: redisPort,
   });
 
-  connection = redis.createClient({
-    url: redisUrl,
-    socket: {
-      connectTimeout: 5000,
-      reconnectStrategy: (retries) => {
-        if (retries > 10) {
-          logger.error('Too many Redis worker reconnection attempts');
-          return new Error('Too many retries');
-        }
-        return Math.min(retries * 100, 3000);
-      }
-    }
-  });
+  redisConnection = new Redis(redisUrl, { family: 6 });
 } catch (error) {
   logger.error('Error connecting worker to Redis', error);
   throw error;
 }
 
 // Connection event handlers for debugging
-connection.on('connect', () => {
+redisConnection.on('connect', () => {
   logger.info('Worker Redis connection established');
 });
 
-connection.on('ready', () => {
+redisConnection.on('ready', () => {
   logger.info('Worker Redis connection ready');
 });
 
-connection.on('error', err => {
+redisConnection.on('error', err => {
   logger.error('Worker Redis connection error:', err);
 });
 
-connection.on('close', () => {
+redisConnection.on('close', () => {
   logger.warn('Worker Redis connection closed');
 });
 
 // Connect to Redis
 (async () => {
   try {
-    await connection.connect();
+    await redisConnection.connect();
   } catch (error) {
     logger.error('Failed to connect to Worker Redis:', error);
   }
@@ -331,33 +317,30 @@ setInterval(
 setTimeout(async () => {
   try {
     logger.info('Testing Redis connection for unsubscribe worker...');
-    
+
     // Test with direct Redis commands
     const testKey = 'worker-redis-test-key';
     const testValue = 'Worker Redis Connected at ' + new Date().toISOString();
-    
+
     logger.info('Testing Worker Redis connection with set/get...');
-    await connection.setEx(testKey, 60, testValue); // 60 second TTL
-    
-    const retrievedValue = await connection.get(testKey);
+    await redisConnection.setEx(testKey, 60, testValue); // 60 second TTL
+
+    const retrievedValue = await redisConnection.get(testKey);
     if (retrievedValue === testValue) {
-      logger.info('Worker Redis test successful!', { 
-        key: testKey, 
-        value: retrievedValue 
+      logger.info('Worker Redis test successful!', {
+        key: testKey,
+        value: retrievedValue,
       });
-      
-      // Queue operations disabled - testing Redis only
-      /*
+
       const counts = await unsubscribeQueue.getJobCounts();
-      logger.info('Unsubscribe queue job counts:', counts);
-      
+      logger.info('Unsubscribe queue job counts (WORKER FILE):', counts);
+
       const waitingJobs = await unsubscribeQueue.getWaitingCount();
-      logger.info('Unsubscribe queue waiting jobs:', waitingJobs);
-      */
+      logger.info('Unsubscribe queue waiting jobs (WORKER FILE):', waitingJobs);
     } else {
       logger.error('Worker Redis test failed - value mismatch', {
         expected: testValue,
-        received: retrievedValue
+        received: retrievedValue,
       });
     }
   } catch (error) {
@@ -382,8 +365,8 @@ process.on('SIGTERM', async () => {
     await unsubscribeWorker.close();
   }
   */
-  if (connection) {
-    connection.disconnect();
+  if (redisConnection) {
+    redisConnection.disconnect();
   }
   process.exit(0);
 });
