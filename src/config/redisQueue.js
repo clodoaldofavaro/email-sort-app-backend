@@ -25,7 +25,9 @@ try {
           return new Error('Too many retries');
         }
         return Math.min(retries * 100, 3000);
-      }
+      },
+      // Force IPv4 for Upstash Redis on Fly.io
+      family: 4
     }
   });
 
