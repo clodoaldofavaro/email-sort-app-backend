@@ -28,8 +28,9 @@ if (process.env.REDIS_QUEUE_HOST && process.env.REDIS_QUEUE_PASSWORD) {
       tls: {
         rejectUnauthorized: false
       },
-      maxRetriesPerRequest: 3,
-      enableReadyCheck: true,
+      // Bull doesn't allow enableReadyCheck or maxRetriesPerRequest
+      enableReadyCheck: false,
+      maxRetriesPerRequest: null,
       retryStrategy: (times) => {
         if (times > 3) {
           logger.error('Redis connection failed after 3 retries');
@@ -58,8 +59,9 @@ if (process.env.REDIS_QUEUE_HOST && process.env.REDIS_QUEUE_PASSWORD) {
       tls: {
         rejectUnauthorized: false
       },
-      maxRetriesPerRequest: 3,
-      enableReadyCheck: true,
+      // Bull doesn't allow enableReadyCheck or maxRetriesPerRequest
+      enableReadyCheck: false,
+      maxRetriesPerRequest: null,
       retryStrategy: (times) => {
         if (times > 3) {
           logger.error('Redis connection failed after 3 retries');
