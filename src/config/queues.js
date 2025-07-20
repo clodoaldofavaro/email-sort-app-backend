@@ -74,8 +74,6 @@ try {
   throw error;
 }
 
-// COMMENTING OUT QUEUE CREATION - TESTING REDIS CONNECTION ONLY
-/*
 logger.info('Creating BullMQ queues with explicit Redis connection...');
 
 const unsubscribeQueue = new Queue('unsubscribe', {
@@ -85,7 +83,6 @@ const unsubscribeQueue = new Queue('unsubscribe', {
 logger.info('BullMQ queues created successfully', {
   queues: ['email-processing', 'unsubscribe'],
 });
-*/
 
 // Test the actual Redis connection
 setTimeout(async () => {
@@ -132,8 +129,6 @@ setTimeout(async () => {
   }
 }, 2000); // Wait 2 seconds for connection to establish
 
-// QUEUE EVENT HANDLERS DISABLED
-/*
 unsubscribeQueue.on('error', error => {
   logger.error('Unsubscribe queue error:', error);
 });
@@ -157,12 +152,11 @@ unsubscribeQueue.on('reconnecting', () => {
 unsubscribeQueue.on('stalled', job => {
   logger.warn('Unsubscribe job stalled', { jobId: job?.id });
 });
-*/
 
 // Log successful module export
 logger.info('Redis connection test module initialized');
 
 // Export empty object - no queues
 module.exports = {
-  // unsubscribeQueue,
+  unsubscribeQueue,
 };
