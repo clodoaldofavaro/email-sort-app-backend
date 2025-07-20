@@ -21,10 +21,40 @@ logger.info('Initializing Bull queues with Redis URL', {
   fullUrl: redisUrl // Show full URL for debugging
 });
 
-// Create queues - Bull will handle the connection using ioredis internally
-logger.info('Creating Bull queues...');
-const emailProcessingQueue = new Bull('email-processing', redisUrl);
-const unsubscribeQueue = new Bull('unsubscribe', redisUrl);
+// Parse the Redis URL to create Upstash-compatible configuration
+const url = new URL(redisUrl);
+const redisConfig = {
+  redis: {
+    host: url.hostname,
+    port: parseInt(url.port) || 6379,
+    password: url.password,
+    // Upstash specific settings
+    tls: {
+      rejectUnauthorized: false
+    },
+    maxRetriesPerRequest: 3,
+    enableReadyCheck: true,
+    retryStrategy: (times) => {
+      if (times > 3) {
+        logger.error('Redis connection failed after 3 retries');
+        return null;
+      }
+      const delay = Math.min(times * 1000, 3000);
+      logger.info(`Retrying Redis connection, attempt ${times}, delay ${delay}ms`);
+      return delay;
+    }
+  }
+};
+
+logger.info('Creating Bull queues with Upstash configuration...', {
+  host: url.hostname,
+  port: url.port || 6379,
+  hasTLS: true
+});
+
+// Create queues with the parsed configuration
+const emailProcessingQueue = new Bull('email-processing', redisConfig);
+const unsubscribeQueue = new Bull('unsubscribe', redisConfig);
 logger.info('Bull queues created successfully', {
   queues: ['email-processing', 'unsubscribe']
 });
