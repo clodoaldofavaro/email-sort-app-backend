@@ -122,7 +122,7 @@ describe('Categories Routes', () => {
         id: 3,
         ...newCategory,
         user_id: mockUser.id,
-        created_at: new Date()
+        created_at: new Date().toISOString()
       };
 
       db.query
@@ -255,7 +255,7 @@ describe('Categories Routes', () => {
         id: 1,
         ...updateData,
         user_id: mockUser.id,
-        updated_at: new Date()
+        updated_at: new Date().toISOString()
       };
 
       db.query

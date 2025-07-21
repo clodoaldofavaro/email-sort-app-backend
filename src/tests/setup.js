@@ -1,29 +1,69 @@
 // Test setup file
 require('dotenv').config();
 
-// Mock database for tests
-const mockDb = {
-  query: jest.fn(),
-  end: jest.fn(),
-};
+// Prevent server from starting in test environment
+process.env.NODE_ENV = 'test';
 
-// Mock Redis if not available
-if (!process.env.REDIS_URL && !process.env.REDIS_HOST && !process.env.REDIS_CACHE_URL && !process.env.REDIS_CACHE_HOST) {
-  jest.mock('../config/redisCache', () => ({
-    get: jest.fn(),
-    set: jest.fn(),
-    del: jest.fn(),
-    setEx: jest.fn(),
-    isAvailable: jest.fn().mockReturnValue(false)
-  }));
-  
-  jest.mock('../config/redisQueue', () => null);
-}
-
-// Mock external services for testing
-jest.mock('../services/openai', () => ({
-  categorizeEmail: jest.fn().mockResolvedValue('Test Category'),
-  summarizeEmail: jest.fn().mockResolvedValue('Test summary'),
+// Mock database
+jest.mock('../config/database', () => ({
+  query: jest.fn().mockResolvedValue({ rows: [] }),
+  end: jest.fn().mockResolvedValue(undefined),
+  connect: jest.fn().mockResolvedValue({
+    query: jest.fn().mockResolvedValue({ rows: [] }),
+    release: jest.fn()
+  }),
+  begin: jest.fn().mockReturnValue({
+    query: jest.fn().mockResolvedValue({ rows: [] }),
+    commit: jest.fn(),
+    rollback: jest.fn()
+  })
 }));
 
-module.exports = { mockDb };
+// Mock Redis if not available
+jest.mock('../config/redisCache', () => ({
+  get: jest.fn(),
+  set: jest.fn(),
+  del: jest.fn(),
+  setEx: jest.fn(),
+  isAvailable: jest.fn().mockReturnValue(false)
+}));
+
+// Mock queues
+jest.mock('../config/queues', () => ({
+  emailQueue: {
+    add: jest.fn(),
+    process: jest.fn()
+  },
+  unsubscribeQueue: {
+    add: jest.fn(),
+    process: jest.fn()
+  }
+}));
+
+// Mock external services for testing
+// Note: OpenAI service is mocked individually in each test file to allow proper control
+
+// Mock websocket to prevent server initialization
+jest.mock('../websocket/notificationSocket', () => ({
+  initializeWebSocket: jest.fn(),
+  sendNotification: jest.fn()
+}));
+
+// Mock worker initialization
+jest.mock('../workers', () => ({
+  initializeWorkers: jest.fn()
+}));
+
+// Suppress console logs in tests
+if (process.env.NODE_ENV === 'test') {
+  global.console = {
+    ...console,
+    log: jest.fn(),
+    error: jest.fn(),
+    warn: jest.fn(),
+    info: jest.fn(),
+    debug: jest.fn()
+  };
+}
+
+module.exports = {};

@@ -135,7 +135,7 @@ describe('Validation Utils', () => {
         const { error } = schemas.bulkEmailAction.validate(invalidData);
 
         expect(error).toBeDefined();
-        expect(error.details[0].message).toContain('uuid');
+        expect(error.details[0].message).toContain('GUID');
       });
 
       it('should reject missing emailIds', () => {

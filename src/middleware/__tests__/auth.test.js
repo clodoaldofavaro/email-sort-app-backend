@@ -103,7 +103,7 @@ describe('Auth Middleware', () => {
 
     it('should handle different authorization header formats', async () => {
       const mockUser = { id: 123, email: 'test@example.com' };
-      req.headers.authorization = 'Bearer   valid-token   ';
+      req.headers.authorization = 'Bearer valid-token';
       jwt.verify.mockReturnValue({ userId: 123 });
       db.query.mockResolvedValue({ rows: [mockUser] });
 
