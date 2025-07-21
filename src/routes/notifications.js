@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../config/database');
 const { authenticateToken } = require('../middleware/auth');
+const logger = require('../utils/logger');
 
 // Get all notifications for the authenticated user
 router.get('/', authenticateToken, async (req, res) => {
@@ -16,7 +17,7 @@ router.get('/', authenticateToken, async (req, res) => {
     
     res.json(rows);
   } catch (error) {
-    console.error('Error fetching notifications:', error);
+    logger.error('Error fetching notifications:', error);
     res.status(500).json({ error: 'Failed to fetch notifications' });
   }
 });
@@ -40,7 +41,7 @@ router.put('/:id/read', authenticateToken, async (req, res) => {
     
     res.json(rows[0]);
   } catch (error) {
-    console.error('Error marking notification as read:', error);
+    logger.error('Error marking notification as read:', error);
     res.status(500).json({ error: 'Failed to mark notification as read' });
   }
 });
@@ -57,7 +58,7 @@ router.put('/read-all', authenticateToken, async (req, res) => {
     
     res.json({ success: true });
   } catch (error) {
-    console.error('Error marking all notifications as read:', error);
+    logger.error('Error marking all notifications as read:', error);
     res.status(500).json({ error: 'Failed to mark all notifications as read' });
   }
 });
@@ -74,7 +75,7 @@ async function createNotification(userId, type, title, message, metadata = {}) {
     
     return rows[0];
   } catch (error) {
-    console.error('Error creating notification:', error);
+    logger.error('Error creating notification:', error);
     throw error;
   }
 }
