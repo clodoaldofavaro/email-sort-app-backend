@@ -113,18 +113,21 @@ class UnsubscribeService {
       const pageAnalysis = await page.extract({
         instruction: `Analyze this unsubscribe page and identify what actions are needed. 
         For pageType, use EXACTLY one of these values:
-        - "confirmation": if the page shows "You unsubscribed", "You've been unsubscribed", "Sorry to see you go", or similar confirmation that unsubscribe is complete
-        - "already_unsubscribed": if the page shows you were already unsubscribed previously
+        - "confirmation": if the page shows "You unsubscribed", "You've been unsubscribed", "Sorry to see you go", "Resubscribe" button, or similar confirmation that unsubscribe is complete
+        - "already_unsubscribed": if the page shows you were already unsubscribed previously or shows a "Resubscribe" option
         - "form": if there is a form with toggles, checkboxes, or inputs to manage email preferences
-        - "button": if there is a button to click to confirm unsubscribe
+        - "button": if there is a button to click to confirm unsubscribe (like "Unsubscribe" button)
         - "error": if showing an error page
         
-        Important: If the page shows email preferences with toggle switches that are OFF, this likely means unsubscribe is already complete - use "confirmation"`,
+        Important: 
+        - If the page shows email preferences with toggle switches that are OFF, this likely means unsubscribe is already complete - use "confirmation"
+        - If you see a "Resubscribe" button, this means unsubscribe is complete - use "confirmation"`,
         schema: z.object({
           pageType: z.enum(['form', 'button', 'confirmation', 'already_unsubscribed', 'error']),
           description: z.string(),
           actionRequired: z.boolean(),
           errorMessage: z.string().optional(),
+          hasResubscribeButton: z.boolean().optional(),
         }),
       });
 
@@ -167,23 +170,28 @@ class UnsubscribeService {
           // Try to complete the unsubscribe process
           await this.performUnsubscribeAction(page);
 
-          // Wait for the action to complete
-          await page.waitForTimeout(3000);
+          // Wait for the action to complete (longer for modal animations)
+          await page.waitForTimeout(5000);
 
-          // Check the result
+          // Check the result - specifically look for Resubscribe button or confirmation
           const result = await page.extract({
-            instruction: 'Check if the unsubscribe was successful',
+            instruction: `Check if the unsubscribe was successful. Look for:
+            - A "Resubscribe" button (which means unsubscribe worked)
+            - Confirmation messages like "You've been unsubscribed"
+            - The original "Unsubscribe" button changed to "Resubscribe"
+            - Any modal or popup confirmation`,
             schema: z.object({
               success: z.boolean(),
               message: z.string(),
               confirmationText: z.string().optional(),
+              hasResubscribeButton: z.boolean().optional(),
             }),
           });
 
           const actionResult = {
-            success: result.success,
-            message: result.message,
-            details: result.confirmationText,
+            success: result.success || result.hasResubscribeButton === true,
+            message: result.hasResubscribeButton ? 'Successfully unsubscribed (Resubscribe button found)' : result.message,
+            details: result.confirmationText || (result.hasResubscribeButton ? 'Unsubscribe button changed to Resubscribe' : ''),
             sessionId: sessionId,
           };
           logger.info('Unsubscribe result after action:', actionResult);
@@ -238,11 +246,13 @@ class UnsubscribeService {
       // Try multiple common unsubscribe patterns
       const actions = [
         'click the unsubscribe button',
+        'click the "Unsubscribe" button',
         'click the confirm unsubscribe button',
         'click the remove me button',
         'click the opt out button',
+        'click the button that says "Unsubscribe"',
         'fill out and submit the unsubscribe form',
-        'click any button that will unsubscribe me',
+        'click any button that will unsubscribe me from emails',
       ];
 
       for (const action of actions) {
@@ -251,7 +261,7 @@ class UnsubscribeService {
           await page.act(action);
 
           // Wait a bit to see if the action worked
-          await page.waitForTimeout(2000);
+          await page.waitForTimeout(3000);
 
           // Check if we've been redirected or if there's a success message
           const currentUrl = page.url();
@@ -259,15 +269,21 @@ class UnsubscribeService {
 
           // If the action seems to have worked, break out of the loop
           const quickCheck = await page.extract({
-            instruction:
-              'Is there any indication that unsubscribe was successful or is in progress?',
+            instruction: `Is there any indication that unsubscribe was successful or is in progress? Look for:
+              - A modal or popup that appeared
+              - The button text changed from "Unsubscribe" to "Resubscribe"
+              - A confirmation message
+              - A page redirect
+              - Any visual change indicating the action was processed`,
             schema: z.object({
               actionWorked: z.boolean(),
               reason: z.string(),
+              hasResubscribeButton: z.boolean().optional(),
+              modalAppeared: z.boolean().optional(),
             }),
           });
 
-          if (quickCheck.actionWorked) {
+          if (quickCheck.actionWorked || quickCheck.hasResubscribeButton === true) {
             logger.info(`Action succeeded: ${quickCheck.reason}`);
             break;
           }
