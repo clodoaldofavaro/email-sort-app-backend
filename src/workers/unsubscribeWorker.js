@@ -218,7 +218,7 @@ try {
         }
 
         // Update job progress
-        job.progress(100);
+        await job.updateProgress(100);
 
         return {
           success: unsubscribeResult.success,
