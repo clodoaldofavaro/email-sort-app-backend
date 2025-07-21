@@ -19,9 +19,27 @@ class UnsubscribeService {
         modelClientOptions: {
           apiKey: process.env.OPENAI_API_KEY,
         },
-        // Add timeout and other options
+        // Enhanced browser configuration to avoid detection
         browserOptions: {
           timeout: 60000, // Increase to 60 seconds
+          headless: false, // Run in headed mode for better compatibility
+          advancedStealth: true, // Enable stealth mode
+          blockAds: true, // Block ads that might interfere
+          ignoreHTTPSErrors: true, // Handle any certificate issues
+          viewport: {
+            width: 1920,
+            height: 1080
+          },
+          deviceScaleFactor: 1,
+          locale: 'en-US',
+          timezone: 'America/New_York',
+          extraHTTPHeaders: {
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Cache-Control': 'no-cache',
+            'Pragma': 'no-cache',
+            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+          }
         },
       });
 
@@ -53,17 +71,33 @@ class UnsubscribeService {
       
       for (let i = 0; i < maxRetries; i++) {
         try {
+          // Add a small delay before navigation to appear more human-like
+          if (i > 0) {
+            await page.waitForTimeout(2000);
+          }
+          
           await page.goto(unsubscribeLink, {
             waitUntil: 'domcontentloaded', // Less strict than networkidle
             timeout: 60000, // Increase to 60 seconds
           });
+          
+          // Check if we hit an error page immediately
+          const currentUrl = page.url();
+          logger.info(`Navigated to: ${currentUrl}`);
+          
+          // Special handling for Substack - wait a bit longer for their JS to load
+          if (unsubscribeLink.includes('substack.com')) {
+            logger.info('Detected Substack URL, waiting for JavaScript to fully load...');
+            await page.waitForTimeout(5000);
+          }
+          
           lastError = null;
           break;
         } catch (error) {
           lastError = error;
           logger.warn(`Navigation attempt ${i + 1} failed:`, { error: error.message });
           if (i < maxRetries - 1) {
-            await page.waitForTimeout(2000); // Wait before retry
+            await page.waitForTimeout(3000); // Wait before retry
           }
         }
       }
