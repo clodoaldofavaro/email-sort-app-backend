@@ -415,10 +415,11 @@ router.put('/bulk/move', authenticateToken, async (req, res) => {
 
     // Update emails to new category
     logger.info('Updating emails to new category');
+    const updatePlaceholders = emailIds.map((_, index) => `$${index + 3}`).join(',');
     const updateResult = await client.query(
       `UPDATE emails 
        SET category_id = $1, updated_at = CURRENT_TIMESTAMP 
-       WHERE id IN (${placeholders}) AND user_id = $2 
+       WHERE id IN (${updatePlaceholders}) AND user_id = $2 
        RETURNING id`,
       [toCategoryId, req.user.id, ...emailIds]
     );
