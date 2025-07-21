@@ -31,7 +31,7 @@ router.post('/unsubscribe/batch', authenticateToken, async (req, res) => {
       `SELECT id, subject, sender, unsubscribe_link, unsubscribe_status 
        FROM emails 
        WHERE id IN (${placeholders}) AND user_id = $1 AND unsubscribe_link IS NOT NULL 
-       AND (unsubscribe_status IS NULL OR unsubscribe_status != 'completed')`,
+       AND (unsubscribe_status IS NULL OR unsubscribe_status IN ('pending', 'failed'))`,
       [req.user.id, ...emailIds]
     );
 
@@ -151,7 +151,7 @@ router.post('/unsubscribe/async/batch', authenticateToken, async (req, res) => {
       `SELECT id, subject, sender, unsubscribe_link, unsubscribe_status 
        FROM emails 
        WHERE id IN (${placeholders}) AND user_id = $1 AND unsubscribe_link IS NOT NULL
-       AND (unsubscribe_status IS NULL OR unsubscribe_status != 'completed')`,
+       AND (unsubscribe_status IS NULL OR unsubscribe_status IN ('pending', 'failed'))`,
       [req.user.id, ...emailIds]
     );
 

@@ -182,8 +182,8 @@ const processNewEmails = async (userId, accountEmail = null) => {
         await db.query(
           `INSERT INTO emails (
             user_id, category_id, account_id, gmail_id, subject, sender, body, 
-            ai_summary, unsubscribe_link, received_at, processed_at
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())`,
+            ai_summary, unsubscribe_link, unsubscribe_status, received_at, processed_at
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW())`,
           [
             userId,
             category.id,
@@ -194,6 +194,7 @@ const processNewEmails = async (userId, accountEmail = null) => {
             body,
             summary,
             unsubscribeLink,
+            unsubscribeLink ? 'pending' : null, // Set status to pending only if unsubscribe link exists
             date ? new Date(date) : new Date(),
           ]
         );

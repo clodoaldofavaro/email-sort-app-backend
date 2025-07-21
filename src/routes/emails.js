@@ -53,10 +53,7 @@ router.get('/category/:categoryId', authenticateToken, async (req, res) => {
 
     // Add unsubscribe status filter
     if (unsubscribeStatus) {
-      if (unsubscribeStatus === 'none') {
-        // Emails with unsubscribe link but not attempted
-        whereClause += ' AND e.unsubscribe_link IS NOT NULL AND e.unsubscribe_status IS NULL';
-      } else if (['completed', 'failed', 'in_progress'].includes(unsubscribeStatus)) {
+      if (['pending', 'completed', 'failed', 'in_progress'].includes(unsubscribeStatus)) {
         whereClause += ` AND e.unsubscribe_status = $${queryParams.length + 1}`;
         queryParams.push(unsubscribeStatus);
       }
