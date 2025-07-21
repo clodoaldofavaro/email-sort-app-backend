@@ -350,36 +350,53 @@ router.put('/:id/category', authenticateToken, async (req, res) => {
 
 // Bulk move emails to different category
 router.put('/bulk/move', authenticateToken, async (req, res) => {
-  const client = await db.pool.connect();
+  let client;
   
   try {
+    logger.info('Bulk move emails request received', { 
+      userId: req.user.id, 
+      body: req.body 
+    });
+    
     const { emailIds, toCategoryId } = req.body;
 
     if (!Array.isArray(emailIds) || emailIds.length === 0) {
+      logger.warn('Invalid email IDs provided', { emailIds });
       return res.status(400).json({ error: 'Email IDs array is required' });
     }
 
     if (!toCategoryId) {
+      logger.warn('No target category ID provided');
       return res.status(400).json({ error: 'Target category ID is required' });
     }
 
+    logger.info('Getting database connection...');
+    client = await db.connect();
+    logger.info('Database connection acquired');
+
     // Verify target category belongs to user
+    logger.info('Verifying target category', { toCategoryId, userId: req.user.id });
     const categoryResult = await client.query(
       'SELECT id, name FROM categories WHERE id = $1 AND user_id = $2',
       [toCategoryId, req.user.id]
     );
 
     if (categoryResult.rows.length === 0) {
+      logger.warn('Target category not found', { toCategoryId, userId: req.user.id });
       return res.status(404).json({ error: 'Target category not found' });
     }
 
     const toCategory = categoryResult.rows[0];
+    logger.info('Target category verified', { categoryName: toCategory.name });
 
     // Start transaction
+    logger.info('Starting database transaction');
     await client.query('BEGIN');
 
     // Get current email details for movement tracking
     const placeholders = emailIds.map((_, index) => `$${index + 2}`).join(',');
+    logger.info('Fetching email details', { emailCount: emailIds.length });
+    
     const emailsResult = await client.query(
       `SELECT e.id, e.category_id, e.sender, e.ai_summary, c.name as from_category_name
        FROM emails e
@@ -389,11 +406,15 @@ router.put('/bulk/move', authenticateToken, async (req, res) => {
     );
 
     if (emailsResult.rows.length === 0) {
+      logger.warn('No valid emails found to move', { emailIds, userId: req.user.id });
       await client.query('ROLLBACK');
       return res.status(404).json({ error: 'No valid emails found to move' });
     }
 
+    logger.info('Emails found', { count: emailsResult.rows.length });
+
     // Update emails to new category
+    logger.info('Updating emails to new category');
     const updateResult = await client.query(
       `UPDATE emails 
        SET category_id = $1, updated_at = CURRENT_TIMESTAMP 
@@ -402,7 +423,10 @@ router.put('/bulk/move', authenticateToken, async (req, res) => {
       [toCategoryId, req.user.id, ...emailIds]
     );
 
+    logger.info('Emails updated', { updatedCount: updateResult.rows.length });
+
     // Record movements for ML tracking
+    logger.info('Recording category movements for ML tracking');
     const movements = emailsResult.rows.map(email => [
       req.user.id,
       email.id,
@@ -427,20 +451,39 @@ router.put('/bulk/move', authenticateToken, async (req, res) => {
       movementParams
     );
 
-    await client.query('COMMIT');
+    logger.info('Category movements recorded');
 
-    res.json({
+    await client.query('COMMIT');
+    logger.info('Transaction committed successfully');
+
+    const response = {
       message: `Successfully moved ${updateResult.rows.length} emails to ${toCategory.name}`,
       movedCount: updateResult.rows.length,
       movedIds: updateResult.rows.map(row => row.id),
       toCategoryName: toCategory.name
-    });
+    };
+
+    logger.info('Bulk move completed successfully', response);
+    res.json(response);
   } catch (error) {
-    await client.query('ROLLBACK');
-    console.error('Error bulk moving emails:', error);
-    res.status(500).json({ error: 'Failed to move emails' });
+    logger.error('Error bulk moving emails:', error);
+    logger.error('Error stack:', error.stack);
+    
+    if (client) {
+      try {
+        await client.query('ROLLBACK');
+        logger.info('Transaction rolled back');
+      } catch (rollbackError) {
+        logger.error('Error rolling back transaction:', rollbackError);
+      }
+    }
+    
+    res.status(500).json({ error: 'Failed to move emails', details: error.message });
   } finally {
-    client.release();
+    if (client) {
+      client.release();
+      logger.info('Database connection released');
+    }
   }
 });
 
