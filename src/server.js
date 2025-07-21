@@ -3,6 +3,7 @@ const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const { CronJob } = require('cron');
+const { createServer } = require('http');
 const logger = require('./utils/logger');
 require('dotenv').config();
 
@@ -11,9 +12,11 @@ const categoryRoutes = require('./routes/categories');
 const emailRoutes = require('./routes/emails');
 const accountRoutes = require('./routes/accounts');
 const unsubscribeRoutes = require('./routes/unsubscribe');
+const notificationRoutes = require('./routes/notifications');
 const testQueueRoutes = require('./routes/test-queue');
 const { scheduleEmailProcessing } = require('./jobs/emailProcessor');
 const { initializeWorkers } = require('./workers');
+const { initializeWebSocket } = require('./websocket/notificationSocket');
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -59,6 +62,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api/emails', emailRoutes);
 app.use('/api/accounts', accountRoutes);
+app.use('/api/notifications', notificationRoutes);
 app.use('/api', unsubscribeRoutes);
 app.use('/api', testQueueRoutes);
 
@@ -145,9 +149,16 @@ try {
   // Continue running without workers - API will still function
 }
 
-app.listen(PORT, '0.0.0.0', () => {
+// Create HTTP server
+const server = createServer(app);
+
+// Initialize WebSocket
+initializeWebSocket(server);
+
+server.listen(PORT, '0.0.0.0', () => {
   logger.info(`Server running on port ${PORT}`);
   logger.info(`Environment: ${process.env.NODE_ENV}`);
+  logger.info('WebSocket server initialized');
 });
 
 module.exports = app;

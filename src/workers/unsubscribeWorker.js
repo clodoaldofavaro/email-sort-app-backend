@@ -4,6 +4,8 @@ const { unsubscribeQueue } = require('../config/queues');
 const db = require('../config/database');
 const unsubscribeService = require('../services/unsubscribe');
 const logger = require('../utils/logger');
+const { createNotification } = require('../routes/notifications');
+const { sendNotification } = require('../websocket/notificationSocket');
 
 logger.info('Redis connection test for worker file...');
 let redisConnection;
@@ -162,18 +164,56 @@ try {
 
           if (processed_count >= total_emails) {
             // Mark batch as completed
-            await db.query(
+            const batchResult = await db.query(
               `UPDATE unsubscribe_jobs 
            SET status = 'completed', 
                completed_at = NOW(),
                updated_at = NOW()
-           WHERE id = $1`,
+           WHERE id = $1
+           RETURNING *`,
               [batchJobId]
             );
 
             logger.info(`Batch ${batchJobId} completed. Processed ${processed_count} emails.`);
 
-            // TODO: Send notification to user about batch completion
+            if (batchResult.rows.length > 0) {
+              const batch = batchResult.rows[0];
+              
+              // Create notification for the user
+              const notificationType = batch.failed_count === 0 ? 'unsubscribe_complete' : 
+                                     batch.success_count === 0 ? 'unsubscribe_failed' : 
+                                     'unsubscribe_partial';
+              
+              const title = batch.failed_count === 0 ? 'Unsubscribe Completed Successfully' :
+                           batch.success_count === 0 ? 'Unsubscribe Failed' :
+                           'Unsubscribe Partially Completed';
+              
+              const message = batch.failed_count === 0 ? 
+                `Successfully unsubscribed from ${batch.success_count} email${batch.success_count !== 1 ? 's' : ''}.` :
+                batch.success_count === 0 ?
+                `Failed to unsubscribe from ${batch.failed_count} email${batch.failed_count !== 1 ? 's' : ''}.` :
+                `Unsubscribed from ${batch.success_count} of ${batch.total_emails} emails. ${batch.failed_count} failed.`;
+              
+              try {
+                const notification = await createNotification(
+                  userId,
+                  notificationType,
+                  title,
+                  message,
+                  {
+                    jobId: batchJobId,
+                    successCount: batch.success_count,
+                    failedCount: batch.failed_count,
+                    totalEmails: batch.total_emails
+                  }
+                );
+                
+                // Send real-time notification via WebSocket
+                sendNotification(userId, notification);
+              } catch (notifError) {
+                logger.error('Failed to create notification:', notifError);
+              }
+            }
           }
         }
 
@@ -230,18 +270,58 @@ try {
             const { processed_count, total_emails } = result.rows[0];
 
             if (processed_count >= total_emails) {
-              await db.query(
+              const batchResult = await db.query(
                 `UPDATE unsubscribe_jobs 
              SET status = 'completed', 
                  completed_at = NOW(),
                  updated_at = NOW()
-             WHERE id = $1`,
+             WHERE id = $1
+             RETURNING *`,
                 [batchJobId]
               );
 
               logger.info(
                 `Batch ${batchJobId} completed with errors. Processed ${processed_count} emails.`
               );
+
+              if (batchResult.rows.length > 0) {
+                const batch = batchResult.rows[0];
+                
+                // Create notification for the user
+                const notificationType = batch.failed_count === 0 ? 'unsubscribe_complete' : 
+                                       batch.success_count === 0 ? 'unsubscribe_failed' : 
+                                       'unsubscribe_partial';
+                
+                const title = batch.failed_count === 0 ? 'Unsubscribe Completed Successfully' :
+                             batch.success_count === 0 ? 'Unsubscribe Failed' :
+                             'Unsubscribe Partially Completed';
+                
+                const message = batch.failed_count === 0 ? 
+                  `Successfully unsubscribed from ${batch.success_count} email${batch.success_count !== 1 ? 's' : ''}.` :
+                  batch.success_count === 0 ?
+                  `Failed to unsubscribe from ${batch.failed_count} email${batch.failed_count !== 1 ? 's' : ''}.` :
+                  `Unsubscribed from ${batch.success_count} of ${batch.total_emails} emails. ${batch.failed_count} failed.`;
+                
+                try {
+                  const notification = await createNotification(
+                    userId,
+                    notificationType,
+                    title,
+                    message,
+                    {
+                      jobId: batchJobId,
+                      successCount: batch.success_count,
+                      failedCount: batch.failed_count,
+                      totalEmails: batch.total_emails
+                    }
+                  );
+                  
+                  // Send real-time notification via WebSocket
+                  sendNotification(userId, notification);
+                } catch (notifError) {
+                  logger.error('Failed to create notification:', notifError);
+                }
+              }
             }
           }
         } catch (updateError) {
