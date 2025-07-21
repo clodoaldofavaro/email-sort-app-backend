@@ -348,6 +348,102 @@ router.put('/:id/category', authenticateToken, async (req, res) => {
   }
 });
 
+// Bulk move emails to different category
+router.put('/bulk/move', authenticateToken, async (req, res) => {
+  const client = await db.pool.connect();
+  
+  try {
+    const { emailIds, toCategoryId } = req.body;
+
+    if (!Array.isArray(emailIds) || emailIds.length === 0) {
+      return res.status(400).json({ error: 'Email IDs array is required' });
+    }
+
+    if (!toCategoryId) {
+      return res.status(400).json({ error: 'Target category ID is required' });
+    }
+
+    // Verify target category belongs to user
+    const categoryResult = await client.query(
+      'SELECT id, name FROM categories WHERE id = $1 AND user_id = $2',
+      [toCategoryId, req.user.id]
+    );
+
+    if (categoryResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Target category not found' });
+    }
+
+    const toCategory = categoryResult.rows[0];
+
+    // Start transaction
+    await client.query('BEGIN');
+
+    // Get current email details for movement tracking
+    const placeholders = emailIds.map((_, index) => `$${index + 2}`).join(',');
+    const emailsResult = await client.query(
+      `SELECT e.id, e.category_id, e.sender, e.ai_summary, c.name as from_category_name
+       FROM emails e
+       LEFT JOIN categories c ON e.category_id = c.id
+       WHERE e.id IN (${placeholders}) AND e.user_id = $1`,
+      [req.user.id, ...emailIds]
+    );
+
+    if (emailsResult.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'No valid emails found to move' });
+    }
+
+    // Update emails to new category
+    const updateResult = await client.query(
+      `UPDATE emails 
+       SET category_id = $1, updated_at = CURRENT_TIMESTAMP 
+       WHERE id IN (${placeholders}) AND user_id = $2 
+       RETURNING id`,
+      [toCategoryId, req.user.id, ...emailIds]
+    );
+
+    // Record movements for ML tracking
+    const movements = emailsResult.rows.map(email => [
+      req.user.id,
+      email.id,
+      email.category_id,
+      toCategoryId,
+      email.sender,
+      email.ai_summary
+    ]);
+
+    const movementValues = movements
+      .map((_, index) => {
+        const base = index * 6;
+        return `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5}, $${base + 6})`;
+      })
+      .join(', ');
+
+    const movementParams = movements.flat();
+
+    await client.query(
+      `INSERT INTO category_movements (user_id, email_id, from_category_id, to_category_id, sender, ai_summary)
+       VALUES ${movementValues}`,
+      movementParams
+    );
+
+    await client.query('COMMIT');
+
+    res.json({
+      message: `Successfully moved ${updateResult.rows.length} emails to ${toCategory.name}`,
+      movedCount: updateResult.rows.length,
+      movedIds: updateResult.rows.map(row => row.id),
+      toCategoryName: toCategory.name
+    });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Error bulk moving emails:', error);
+    res.status(500).json({ error: 'Failed to move emails' });
+  } finally {
+    client.release();
+  }
+});
+
 // Process emails for all user's accounts
 router.post('/process', authenticateToken, async (req, res) => {
   try {
